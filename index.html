@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SSANZ Judge Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+:root {
+  --bg: #f5f6f2; --surface: #ffffff; --ink: #1d2420; --muted: #5d6a62; --line: #d9ded7;
+  --accent: #2f6b4f; --accent-soft: #e3efe8;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #141916; --surface: #1c2320; --ink: #e6ebe7; --muted: #9aa8a0; --line: #2f3933; --accent: #6fbf95; --accent-soft: #213229; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 680px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 48px 64px; display: grid; gap: 24px; }
+.eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin: 0; }
+h1 { font-family: var(--font-display); font-size: clamp(28px, 6vw, 38px); line-height: 1.1; margin: 4px 0 0; }
+p { margin: 0; }
+.card { padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: grid; gap: 8px; }
+.card b { font-size: 18px; color: var(--accent); }
+.card span { color: var(--muted); }
+a { color: var(--accent); }
+footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">SSANZ Judges Development Subcommittee</p>
+    <h1>SSANZ Judge Log</h1>
+  </header>
+  <p>One place for SSANZ judges to keep their judging records: appointments, training forms and reflections. It works on your phone at trials, even without signal, and on a computer at home. Your records are saved to your own Judging Record in Google Drive.</p>
+  <div class="card">
+    <b>Coming soon</b>
+    <span>The Judge Log is being built. Judges will be told when it's ready to use.</span>
+  </div>
+  <footer>Questions: ssanzjdsubcommittee@gmail.com · <a href="privacy.html">Privacy policy</a></footer>
+</main>
+</body>
+</html>
