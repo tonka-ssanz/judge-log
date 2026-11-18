@@ -1,47 +1,198 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-NZ">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SSANZ Judge Log</title>
+<meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Judge Log">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
-<style>
-:root {
-  --bg: #f5f6f2; --surface: #ffffff; --ink: #1d2420; --muted: #5d6a62; --line: #d9ded7;
-  --accent: #2f6b4f; --accent-soft: #e3efe8;
-  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #141916; --surface: #1c2320; --ink: #e6ebe7; --muted: #9aa8a0; --line: #2f3933; --accent: #6fbf95; --accent-soft: #213229; color-scheme: dark; }
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
-.wrap { max-width: 680px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 48px 64px; display: grid; gap: 24px; }
-.eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin: 0; }
-h1 { font-family: var(--font-display); font-size: clamp(28px, 6vw, 38px); line-height: 1.1; margin: 4px 0 0; }
-p { margin: 0; }
-.card { padding: 16px 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); display: grid; gap: 8px; }
-.card b { font-size: 18px; color: var(--accent); }
-.card span { color: var(--muted); }
-a { color: var(--accent); }
-footer { color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); padding-top: 16px; }
-</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main class="wrap">
-  <header>
-    <p class="eyebrow">SSANZ Judges Development Subcommittee</p>
-    <h1>SSANZ Judge Log</h1>
-  </header>
-  <p>One place for SSANZ judges to keep their judging records: appointments, training forms and reflections. It works on your phone at trials, even without signal, and on a computer at home. Your records are saved to your own Judging Record in Google Drive.</p>
-  <div class="card">
-    <b>Coming soon</b>
-    <span>The Judge Log is being built. Judges will be told when it's ready to use.</span>
+<header class="top">
+  <div class="row">
+    <button class="back" id="backBtn" hidden aria-label="Back to home">‹ Home</button>
+    <h1 id="pageTitle">SSANZ Judge Log<small>Judges Development Sub-Committee</small></h1>
   </div>
-  <footer>Questions: ssanzjdsubcommittee@gmail.com · <a href="privacy.html">Privacy policy</a></footer>
+</header>
+
+<main class="wrap">
+
+<!-- HOME -->
+<section data-view="home">
+  <div id="homeStatus"></div>
+  <div class="tiles">
+    <a class="tile primary" href="#log"><b>Log a judging appointment</b><span>Works without signal. Sync when you're back online.</span></a>
+    <a class="tile" href="#record"><b>My record</b><span>Past appointments and pass rates</span></a>
+    <a class="tile" href="report.html"><b>Report a concern</b><span>Email the JDSC about a trial incident</span></a>
+    <a class="tile" href="#swi"><b>Stewarding with Intent</b><span>Assess a steward</span></a>
+    <a class="tile" href="#probo"><b>Probationary coaching</b><span>Coach a probationary judge</span></a>
+  </div>
+  <div class="actions">
+    <button class="btn ghost block" id="syncBtnHome">Sync now</button>
+    <a class="btn ghost block" href="#settings">My details and Judging Record</a>
+  </div>
+  <footer class="foot">Questions: <a href="mailto:ssanzjdsubcommittee@gmail.com">ssanzjdsubcommittee@gmail.com</a> · <a href="privacy.html">Privacy policy</a></footer>
+</section>
+
+<!-- SETTINGS -->
+<section data-view="settings" hidden>
+  <h2>My details</h2>
+  <p class="muted small">These stay on this phone. Your name goes on forms and reports you send.</p>
+  <label class="f" for="setName">Your name</label>
+  <input type="text" id="setName" autocomplete="name">
+  <label class="f" for="setEmail">Your email<span class="hint">The Google account your Judging Record is in</span></label>
+  <input type="email" id="setEmail" autocomplete="email">
+  <div class="actions"><button class="btn" id="saveDetails">Save details</button></div>
+
+  <h2>My Judging Record</h2>
+  <div class="card" id="recordCard"></div>
+  <div class="actions">
+    <button class="btn" id="chooseRecord">Choose my Judging Record</button>
+    <button class="btn ghost" id="signOut" hidden>Sign out of Google on this phone</button>
+  </div>
+  <h2>Put the Judge Log on your home screen</h2>
+  <p class="small"><b>iPhone:</b> in Safari, tap the Share button, then <i>Add to Home Screen</i>.<br>
+  <b>Android:</b> in Chrome, tap the ⋮ menu, then <i>Add to Home screen</i> or <i>Install app</i>.</p>
+  <p class="small muted">Open it once while you have signal so it's saved for use at trials.</p>
+</section>
+
+<!-- LOG ENTRY -->
+<section data-view="log" hidden>
+  <form id="logForm" autocomplete="off">
+    <input type="hidden" name="entryId">
+    <label class="f">Which record?</label>
+    <div class="chips" data-chips="tab" data-options="SSANZ|Dogs NZ|Other" data-default="SSANZ"></div>
+
+    <label class="f" for="fDate">Date</label>
+    <input type="date" id="fDate" name="date" required>
+
+    <label class="f" for="fHost">Host organisation</label>
+    <input type="text" id="fHost" name="host" list="hostList" required>
+    <datalist id="hostList"></datalist>
+
+    <label class="f" for="fLoc">Trial location</label>
+    <input type="text" id="fLoc" name="location" list="locList">
+    <datalist id="locList"></datalist>
+
+    <label class="f">Level</label>
+    <div class="chips" data-chips="level" data-options="Novice|Intermediate|Advanced|Excellent|Premium"></div>
+
+    <label class="f">Element</label>
+    <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Other"></div>
+    <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
+
+    <label class="f" for="fSetter">Who set the hide(s)?</label>
+    <div class="chips" data-chips="setterQuick" data-options="Me|Co-judge|Trainee" data-fill="fSetter"></div>
+    <input type="text" id="fSetter" name="setter" style="margin-top:8px" placeholder="Name, or tap above">
+
+    <div class="two">
+      <div><label class="f" for="fTeams">Teams</label><input type="number" inputmode="numeric" min="0" id="fTeams" name="teams" required></div>
+      <div><label class="f" for="fPasses">Passes<span class="hint">Correct calls on all hides in time</span></label><input type="number" inputmode="numeric" min="0" id="fPasses" name="passes" required></div>
+    </div>
+    <p class="small muted" id="rateNote"></p>
+
+    <label class="f" for="fVideo">Photo or video link<span class="hint">YouTube Short from your own channel. Always post as <b>Unlisted</b>.</span></label>
+    <input type="url" id="fVideo" name="video" inputmode="url" placeholder="https://youtube.com/shorts/…">
+
+    <label class="f" for="fRefl">Reflections</label>
+    <textarea id="fRefl" name="reflections" data-voice placeholder="What went well? What would you do differently?"></textarea>
+
+    <div class="actions">
+      <button class="btn block" type="submit">Save</button>
+      <button class="btn ghost block" type="button" id="deleteEntry" hidden>Delete this entry</button>
+    </div>
+  </form>
+</section>
+
+<!-- RECORD -->
+<section data-view="record" hidden>
+  <div class="chips" data-chips="recordTab" data-options="SSANZ|Dogs NZ|Other" data-default="SSANZ" style="margin-top:16px"></div>
+  <div id="recordStatus"></div>
+  <div class="stats" id="recordStats"></div>
+  <div class="card" id="recordList"></div>
+  <div class="actions">
+    <button class="btn ghost block" id="syncBtnRecord">Sync and refresh</button>
+    <a class="btn ghost block" id="openSheet" target="_blank" rel="noopener" hidden>Open my Judging Record in Google Sheets</a>
+  </div>
+</section>
+
+<!-- STEWARDING WITH INTENT -->
+<section data-view="swi" hidden>
+  <form id="swiForm" autocomplete="off">
+    <p class="muted small">Assess a trainee stewarding for you. It's emailed to the JDSC, and the trainee too if you add their email.</p>
+    <label class="f" for="sName">Trainee's name</label>
+    <input type="text" id="sName" name="trainee" required>
+    <label class="f" for="sEmail">Trainee's email<span class="hint">Optional. They'll get a copy.</span></label>
+    <input type="email" id="sEmail" name="traineeEmail">
+    <label class="f" for="sHost">Hosting club</label>
+    <input type="text" id="sHost" name="host" list="hostList" required>
+    <label class="f" for="sDate">Date</label>
+    <input type="date" id="sDate" name="date" required>
+    <label class="f">Level</label>
+    <div class="chips" data-chips="level" data-options="Novice|Intermediate|Advanced|Excellent|Premium"></div>
+    <label class="f">Element</label>
+    <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Other"></div>
+    <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
+    <label class="f" for="sPart">Number of participants</label>
+    <input type="number" inputmode="numeric" min="0" id="sPart" name="participants">
+    <h3>Did they…</h3>
+    <div class="yn" id="swiQuestions"></div>
+    <label class="f" for="sComments">Comments<span class="hint">Anything to add, especially for the last two questions</span></label>
+    <textarea id="sComments" name="comments" data-voice></textarea>
+    <div class="actions">
+      <button class="btn block" type="submit">Create email to JDSC</button>
+      <button class="btn ghost block" type="button" data-clear>Clear form</button>
+    </div>
+    <p class="small muted">Your mail app opens with everything filled in. Press Send. With no signal it waits in your outbox.</p>
+  </form>
+</section>
+
+<!-- PROBATIONARY COACHING -->
+<section data-view="probo" hidden>
+  <form id="proboForm" autocomplete="off">
+    <p class="muted small">For the coaching judge: one form per search. It's emailed to the JDSC, and the trainee too if you add their email.</p>
+    <label class="f">Form</label>
+    <div class="chips" data-chips="stage" data-options="Novice|Intermediate" data-default="Novice"></div>
+    <label class="f" for="pName">Trainee's name</label>
+    <input type="text" id="pName" name="trainee" required>
+    <div class="two">
+      <div><label class="f" for="pMem">SSANZ membership no.</label><input type="text" inputmode="numeric" id="pMem" name="membership"></div>
+      <div><label class="f" for="pDate">Date</label><input type="date" id="pDate" name="date" required></div>
+    </div>
+    <label class="f" for="pEmail">Trainee's email<span class="hint">Optional. They'll get a copy.</span></label>
+    <input type="email" id="pEmail" name="traineeEmail">
+    <label class="f" for="pHost">Host organisation</label>
+    <input type="text" id="pHost" name="host" list="hostList" required>
+    <label class="f">Element being judged</label>
+    <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Other"></div>
+    <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
+    <div class="two">
+      <div><label class="f" for="pE">Teams entered (E)</label><input type="number" inputmode="numeric" min="0" id="pE" name="entered"></div>
+      <div><label class="f" for="pS">Sourced in time (S)</label><input type="number" inputmode="numeric" min="0" id="pS" name="sourced"></div>
+    </div>
+    <h3>Coaching given</h3>
+    <p class="small muted">Tick the areas where you gave coaching and guidance, through to letting the trainee take the lead under your supervision.</p>
+    <div id="proboAreas"></div>
+    <label class="f" for="pComments">Coaching judge's comments</label>
+    <textarea id="pComments" name="comments" data-voice></textarea>
+    <div class="actions">
+      <button class="btn block" type="submit">Create email to JDSC</button>
+      <button class="btn ghost block" type="button" data-clear>Clear form</button>
+    </div>
+    <p class="small muted">Your name and Google email stand in for your signature.</p>
+  </form>
+</section>
+
 </main>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="app.js"></script>
 </body>
 </html>

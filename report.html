@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Report a concern · SSANZ Judge Log</title>
+<meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="row">
+    <a class="back" href="./#home">‹ Home</a>
+    <h1>Report a concern</h1>
+  </div>
+</header>
+<main class="wrap">
+<form id="reportForm" autocomplete="off">
+  <p class="muted small">This goes to the JDSC only. It is <b>not</b> added to your Judging Record. Your mail app opens with the report filled in; add any photos, then press Send.</p>
+
+  <label class="f" for="rJudge">Your name</label>
+  <input type="text" id="rJudge" name="judge" required autocomplete="name">
+
+  <label class="f" for="rDate">Trial date</label>
+  <input type="date" id="rDate" name="date" required>
+
+  <label class="f" for="rHost">Host organisation and location</label>
+  <input type="text" id="rHost" name="host" required placeholder="e.g. Noseworx, Hamilton">
+
+  <label class="f">Level</label>
+  <div class="chips" data-chips="level" data-options="Novice|Intermediate|Advanced|Excellent|Premium|Not applicable"></div>
+
+  <label class="f">Element</label>
+  <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Not applicable|Other"></div>
+  <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
+
+  <label class="f">Type of concern</label>
+  <div class="chips" data-chips="type" data-options="Aggressive dog|Compromised dog|Dog fouled during search|Incorrect equipment supplied|Handler conduct|Venue or safety issue|Injury|Rule question|Other"></div>
+
+  <div class="two">
+    <div><label class="f" for="rDog">Dog's name</label><input type="text" id="rDog" name="dog"></div>
+    <div><label class="f" for="rHandler">Handler's name</label><input type="text" id="rHandler" name="handler"></div>
+  </div>
+  <p class="small muted">Please spell names the same way each time so the committee can spot repeat reports.</p>
+
+  <label class="f" for="rWit">Witnesses</label>
+  <input type="text" id="rWit" name="witnesses" placeholder="Steward, other judges, trial host…">
+
+  <label class="f" for="rWhat">What happened</label>
+  <textarea id="rWhat" name="what" required data-voice></textarea>
+
+  <label class="f" for="rAction">Action taken on the day</label>
+  <textarea id="rAction" name="action" data-voice style="min-height:80px"></textarea>
+
+  <label class="f">Was the trial host involved?</label>
+  <div class="chips" data-chips="hostInvolved" data-options="Yes|No"></div>
+  <input type="text" name="hostDetail" placeholder="Who, and what was agreed" hidden style="margin-top:8px">
+
+  <label class="f">Resolved on the day?</label>
+  <div class="chips" data-chips="resolved" data-options="Yes – for information only|No – needs follow-up"></div>
+
+  <div class="actions">
+    <button class="btn block" type="submit">Create email to JDSC</button>
+    <button class="btn ghost block" type="button" id="clearReport">Clear form</button>
+  </div>
+  <p class="small muted">No signal? The email waits in your outbox and sends when you're back online. Your answers stay on this phone until you clear the form.</p>
+</form>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script>
+'use strict';
+// The concern-log script in the JDSC Gmail reads the lines between the header and footer.
+// If any label below changes, change REPORT_LABELS in that script too.
+const JDSC = 'ssanzjdsubcommittee@gmail.com';
+const KEY = 'jl.draft.report';
+const $ = (s) => document.querySelector(s);
+const f = $('#reportForm');
+function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; setTimeout(() => { t.hidden = true; }, 3500); }
+function get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+function today() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+function nzDate(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; }
+
+document.querySelectorAll('[data-chips]').forEach((box, n) => {
+  const name = box.dataset.chips;
+  box.innerHTML = box.dataset.options.split('|').map((o, i) =>
+    `<input type="radio" name="${name}" id="r${n}-${i}" value="${o}"><label for="r${n}-${i}">${o}</label>`).join('');
+});
+const chip = (name) => { const c = f.querySelector(`input[name="${name}"]:checked`); return c ? c.value : ''; };
+function syncOthers() {
+  f.elementOther.hidden = chip('element') !== 'Other';
+  f.hostDetail.hidden = chip('hostInvolved') !== 'Yes';
+}
+
+function save() {
+  const d = {};
+  Array.from(f.elements).forEach((el) => { if (!el.name) return; if (el.type === 'radio') { if (el.checked) d[el.name] = el.value; } else d[el.name] = el.value; });
+  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* ignore */ }
+}
+function restore() {
+  const d = get(KEY, null); const s = get('jl.settings', {});
+  if (d) Array.from(f.elements).forEach((el) => {
+    if (!el.name || !(el.name in d)) return;
+    if (el.type === 'radio') el.checked = d[el.name] === el.value; else el.value = d[el.name];
+  });
+  if (!f.judge.value && s.name) f.judge.value = s.name;
+  if (!f.date.value) f.date.value = today();
+  syncOthers();
+}
+f.addEventListener('input', save);
+f.addEventListener('change', () => { syncOthers(); save(); });
+
+window.openMail = (url) => { location.href = url; };
+const v = (x) => (x && String(x).trim()) || '-';
+f.addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const type = chip('type'), resolved = chip('resolved');
+  if (!type) { toast('Tap a type of concern.'); return; }
+  if (!resolved) { toast('Was it resolved on the day? Tap Yes or No.'); return; }
+  const element = chip('element') === 'Other' ? (f.elementOther.value.trim() || 'Other') : chip('element');
+  const hostInv = chip('hostInvolved') === 'Yes' ? 'Yes' + (f.hostDetail.value.trim() ? ' – ' + f.hostDetail.value.trim() : '') : (chip('hostInvolved') || '-');
+  const body = [
+    'SSANZ JUDGE CONCERN REPORT',
+    'Judge: ' + v(f.judge.value),
+    'Trial date: ' + v(nzDate(f.date.value)),
+    'Host organisation and location: ' + v(f.host.value),
+    'Level: ' + v(chip('level')),
+    'Element: ' + v(element),
+    'Type of concern: ' + type,
+    'Dog: ' + v(f.dog.value),
+    'Handler: ' + v(f.handler.value),
+    'Witnesses: ' + v(f.witnesses.value),
+    'What happened: ' + v(f.what.value),
+    'Action taken on the day: ' + v(f.action.value),
+    'Trial host involved: ' + hostInv,
+    'Resolved on the day: ' + resolved,
+    '--- end of report ---',
+    '',
+    '(Photos attached: add them to this email before sending.)',
+  ].join('\n');
+  const subject = `[Judge Concern] ${type} – ${f.host.value.trim()} – ${nzDate(f.date.value)}`;
+  window.openMail('mailto:' + JDSC + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body));
+  setTimeout(() => {
+    if (confirm('Did your mail app open with the report ready to send?\n\nOK clears this form. Cancel keeps it so you can try again.')) {
+      localStorage.removeItem(KEY); location.href = './#home';
+    }
+  }, 1500);
+});
+$('#clearReport').addEventListener('click', () => {
+  if (!confirm('Clear this report?')) return;
+  f.reset(); localStorage.removeItem(KEY); restore();
+});
+
+// Voice button, same as the main app.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+document.querySelectorAll('textarea[data-voice]').forEach((ta) => {
+  const hint = document.createElement('p'); hint.className = 'small muted';
+  if (!SR) { hint.textContent = 'To speak instead of typing, tap the microphone on your keyboard.'; ta.after(hint); return; }
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'btn ghost small mic'; btn.textContent = '🎤 Speak';
+  hint.textContent = 'No signal? The microphone on your keyboard may still work.';
+  ta.after(btn); btn.after(hint);
+  let rec = null;
+  btn.addEventListener('click', () => {
+    if (rec) { rec.stop(); return; }
+    rec = new SR(); rec.lang = 'en-NZ'; rec.continuous = true;
+    rec.onresult = (ev) => {
+      let t = ''; for (let i = ev.resultIndex; i < ev.results.length; i++) if (ev.results[i].isFinal) t += ev.results[i][0].transcript;
+      if (!t) return; t = t.trim(); t = t.charAt(0).toUpperCase() + t.slice(1);
+      ta.value = (ta.value && !/\s$/.test(ta.value) ? ta.value + ' ' : ta.value) + t + (/[.!?]$/.test(t) ? ' ' : '. ');
+      save();
+    };
+    rec.onerror = (ev) => { if (ev.error === 'network') toast('Voice needs signal here. Try the microphone on your keyboard.'); };
+    rec.onend = () => { rec = null; btn.classList.remove('on'); btn.textContent = '🎤 Speak'; };
+    try { rec.start(); btn.classList.add('on'); btn.textContent = '■ Stop'; } catch (e) { rec = null; }
+  });
+});
+
+restore();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
