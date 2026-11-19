@@ -108,9 +108,11 @@
     <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Other"></div>
     <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
 
-    <label class="f">Who set the hide(s)?</label>
-    <div class="chips" data-chips="setterQuick" data-options="Me|Someone else" data-default="Me"></div>
-    <input type="text" id="fSetter" name="setter" value="Me" style="margin-top:8px" placeholder="Their name" autocomplete="off" hidden>
+    <div id="setterBlock">
+      <label class="f">Who set the hide(s)?<span class="hint" id="setterHint" hidden>Tap one before saving.</span></label>
+      <div class="chips" id="setterChips"></div>
+      <input type="text" id="fSetter" name="setter" style="margin-top:8px" placeholder="Their name" autocomplete="off" hidden>
+    </div>
 
     <div class="two">
       <div><label class="f" for="fTeams" id="teamsLabel">Teams<span class="hint">Number of teams judged</span></label><input type="number" inputmode="numeric" min="0" id="fTeams" name="teams" required></div>
@@ -146,9 +148,10 @@
 
 <!-- RECORD -->
 <section data-view="record" hidden>
-  <div class="chips" data-chips="recordTab" data-options="SSANZ|Dogs NZ|Other|Training" data-default="SSANZ" style="margin-top:16px"></div>
   <div id="recordStatus"></div>
   <div class="stats" id="recordStats"></div>
+  <div id="recordSplit"></div>
+  <div id="recordNote"></div>
   <div class="card" id="recordList"></div>
   <div class="actions">
     <button class="btn ghost block" id="syncBtnRecord">Sync and refresh</button>

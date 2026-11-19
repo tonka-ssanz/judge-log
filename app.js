@@ -555,10 +555,10 @@ function openLogForm(id) {
   f.date.value = v.date || today();
   ['host', 'location', 'setter', 'teams', 'passes', 'video'].forEach((k) => { f[k].value = v[k] == null ? '' : v[k]; });
   fillReflections(f, v.reflections);
-  // Who set the hide(s): Me (default) or Someone else. Older entries may hold a name; keep it unless the judge taps a tile.
-  if (!f.setter.value) f.setter.value = 'Me';
-  setChip(f, 'setterQuick', f.setter.value === 'Me' ? 'Me' : 'Someone else');
-  f.setter.hidden = f.setter.value === 'Me';
+  // Who set the hide(s): the tiles are drawn by renderSetter() (from showKind) to suit the search type.
+  const choice = v.setter ? setterChoiceFrom(v.kind || 'Judging', v.setter, v.supervisor) : '';
+  f.dataset.setterChoice = choice; f.dataset.setterTouched = e && choice ? '1' : '';
+  if (choice !== 'Someone else') f.setter.value = '';
   setChip(f, 'level', v.level || ''); setElement(f, v.element || '');
   $('#deleteEntry').hidden = !e || e.sent;
   showKind(v.extras || {}); updateRate();
@@ -572,6 +572,7 @@ function showKind(values) {
   $('#passesLabel').innerHTML = training ? 'Sourced in time (S)<span class="hint">Teams that sourced the hide within the time allowed</span>' : 'Passes<span class="hint">Correct calls on all hides in time</span>';
   $('#reflLabel').textContent = training ? 'Trainee learning / reflections' : 'Reflections';
   $('#fSup').previousElementSibling.textContent = form ? form.supervisorTitle : 'Supervising judge';
+  renderSetter();
   const box = $('#trainingExtras');
   const keep = values || readExtras();
   box.hidden = !form || !form.traineeExtras.length;
@@ -632,7 +633,7 @@ function readLogForm() {
   return {
     id: f.entryId.value || uid(), kind, tab: kind === 'Judging' ? (chipValue(f, 'tab') || 'SSANZ') : CONFIG.trainingTab,
     supervisor: kind === 'Judging' ? '' : f.supervisor.value.trim(), extras: kind === 'Judging' ? {} : readExtras(), date: f.date.value, host: f.host.value.trim(), location: f.location.value.trim(),
-    setter: f.setter.value.trim(), level: chipValue(f, 'level'), element: elementValue(f), teams: f.teams.value, passes: f.passes.value,
+    setter: readSetter(f, kind), level: chipValue(f, 'level'), element: elementValue(f), teams: f.teams.value, passes: f.passes.value,
     video: f.video.value.trim(), reflections: readReflections(f),
   };
 }
@@ -644,43 +645,81 @@ function updateRate() {
 }
 
 /* ---------- record view ---------- */
+/* Did this judge set the hide(s)? New entries say "Me"; older ones may hold the judge's own name or be blank. */
+function setByMe(setter, myName) {
+  const v = String(setter || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!v) return true; // older records often left this blank: count them as the judge's own
+  if (['me', 'myself', 'self', 'judge', 'me (judge)'].includes(v)) return true;
+  const n = String(myName || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return !!n && v === n;
+}
+/* Code from the Element: Buried Hide belongs to Buried Hides; the four search elements are Nosework. */
+function searchCode(element) {
+  const e = String(element || '').trim().toLowerCase();
+  if (/buried/.test(e)) return 'Buried Hides';
+  if (['container', 'containers', 'interior', 'interiors', 'exterior', 'exteriors', 'vehicle', 'vehicles'].includes(e)) return 'Nosework';
+  return 'Other';
+}
 let recordItems = [];
 function renderRecord() {
   const s = settings(); const f = $('[data-view=record]');
   buildChips(f);
-  const tab = chipValue(f, 'recordTab') || 'SSANZ';
+  const tab = 'SSANZ';
   const hist = (store.get('history', {})[tab]) || [];
-  const pend = entries().filter((e) => e.tab === tab && e.status !== 'synced');
+  const pend = entries().filter((e) => e.tab === tab && e.status !== 'synced' && setByMe(e.setter, s.name));
   let status = '';
   if (!s.fileId) status = `<div class="status warn"><span class="grow">Choose your Judging Record to see your history.</span><a class="btn small" href="#settings">Choose</a></div>`;
   else if (s.historyAt) status = `<p class="small muted">Copy from your Judging Record, last refreshed ${new Date(s.historyAt).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}.</p>`;
   else status = `<p class="small muted">Tap “Sync and refresh” to load your history.</p>`;
   $('#recordStatus').innerHTML = status;
 
-  const isTraining = tab === CONFIG.trainingTab;
-  const rates = [], all = hist.map((x) => ({ teams: +x.r[6] || 0, passes: +x.r[7] || 0 }));
-  all.forEach((x) => { if (x.teams) rates.push(x.passes / x.teams); });
-  const teams = all.reduce((a, x) => a + x.teams, 0);
-  const avg = rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 100) + '%' : '–';
+  // Only searches where this judge set the hide(s) count towards the statistics and pass rates.
+  const all = hist.map((x) => ({ setter: x.r[3], level: x.r[4], element: x.r[5], teams: +x.r[6] || 0, passes: +x.r[7] || 0, hasPasses: x.r[7] !== '' && x.r[7] != null }));
+  const mine = all.filter((x) => setByMe(x.setter, s.name));
+  const sum = (list) => {
+    const rated = list.filter((x) => x.teams && x.hasPasses);
+    const rate = rated.length ? Math.round((rated.reduce((a, x) => a + x.passes / x.teams, 0) / rated.length) * 100) + '%' : '–';
+    return { n: list.length, teams: list.reduce((a, x) => a + x.teams, 0), rate };
+  };
+  const tot = sum(mine);
+  const others = all.length - mine.length;
   $('#recordStats').innerHTML =
-    `<div class="stat"><b>${hist.length}</b><span>${isTraining ? 'Training searches' : 'Searches judged'}</span></div>` +
-    `<div class="stat"><b>${teams}</b><span>Teams</span></div>` +
-    `<div class="stat"><b>${avg}</b><span>Average pass rate</span></div>`;
+    `<div class="stat"><b>${tot.n}</b><span>Searches judged</span></div>` +
+    `<div class="stat"><b>${tot.teams}</b><span>Teams</span></div>` +
+    `<div class="stat"><b>${tot.rate}</b><span>Average pass rate</span></div>`;
+  // Split by Code (Nosework / Buried Hides) and Level.
+  const LEVELS = ['Novice', 'Intermediate', 'Advanced', 'Excellent', 'Premium'];
+  const lvOrder = (l) => { const i = LEVELS.indexOf(l); return i < 0 ? 99 : i; };
+  const codes = ['Nosework', 'Buried Hides', 'Other'].map((code) => {
+    const list = mine.filter((x) => searchCode(x.element) === code);
+    const levels = [...new Set(list.map((x) => x.level || '–'))].sort((a, b) => lvOrder(a) - lvOrder(b) || a.localeCompare(b));
+    return { code, list, levels };
+  }).filter((c) => c.list.length);
+  $('#recordSplit').innerHTML = codes.length ? codes.map((c) => {
+    const t = sum(c.list);
+    return `<div class="split"><div class="split-head"><b>${esc(c.code)}</b><span class="small muted">${t.n} search${t.n === 1 ? '' : 'es'} · ${t.teams} teams · ${t.rate}</span></div>
+      <table class="split-table"><thead><tr><th>Level</th><th>Searches</th><th>Teams</th><th>Pass rate</th></tr></thead><tbody>` +
+      c.levels.map((lv) => { const r = sum(c.list.filter((x) => (x.level || '–') === lv)); return `<tr><td>${esc(lv)}</td><td>${r.n}</td><td>${r.teams}</td><td>${r.rate}</td></tr>`; }).join('') +
+      `</tbody></table></div>`;
+  }).join('') : '';
+  $('#recordNote').innerHTML = all.length
+    ? `<p class="small muted">Only searches where you set the hides are shown and counted.${others ? ` ${others} search${others === 1 ? '' : 'es'} with hides set by someone else left out.` : ''}</p>` : '';
 
   const rowHtml = (d) => `<div class="entry">
       <div class="top"><span>${d.kind && d.kind !== 'Judging' ? esc(d.kind) + ': ' : ''}${esc(d.level)} ${esc(d.element)}</span><span>${esc(d.dateText)}</span></div>
       <div class="meta">${esc([d.host, d.location].filter(Boolean).join(' · '))}${d.teams !== '' ? ` · ${d.passes !== '' ? esc(d.passes) + '/' + esc(d.teams) + ' passed' : esc(d.teams) + ' teams'}` : ''}${d.setter ? ` · Hides: ${esc(d.setter)}` : ''}${d.supervisor ? ` · Supervising judge: ${esc(d.supervisor)}` : ''}</div>
+      ${!d.pending && (d.teams === '' || d.passes === '') ? `<div style="margin-top:6px"><span class="pill">${d.teams === '' ? 'Teams and passes missing' : 'Passes missing'}</span></div>` : ''}
       ${d.video ? `<div class="small"><a href="${esc(d.video)}" target="_blank" rel="noopener">Video</a></div>` : ''}
       ${d.reflections ? `<div class="refl">${esc(d.reflections)}</div>` : ''}
       ${d.pending ? `<div style="margin-top:8px"><span class="pill">Waiting to sync</span> <a class="small" href="#log/${esc(d.id)}">Edit</a></div>` : ''}
       ${d.kind && d.kind !== 'Judging' ? `<div style="margin-top:8px"><a class="small" href="#training">See supervisor comments in My training</a></div>` : ''}
     </div>`;
   const items = pend.map((e) => ({ ...e, dateText: nzDate(e.date), pending: true }))
-    .concat(hist.slice().reverse().map((x) => ({ date: isoDate(x.r[0]), dateText: x.r[0], host: x.r[1], location: x.r[2], setter: x.r[3], level: x.r[4], element: x.r[5], teams: x.r[6] ?? '', passes: x.r[7] ?? '', video: /^https?:/.test(x.r[9] || '') ? x.r[9] : '', reflections: x.r[10],
-      kind: isTraining ? (x.r[11] || 'Training') : 'Judging', supervisor: isTraining ? x.r[12] : '' })));
+    .concat(hist.filter((x) => setByMe(x.r[3], s.name)).slice().reverse().map((x) => ({ date: isoDate(x.r[0]), dateText: x.r[0], host: x.r[1], location: x.r[2], setter: x.r[3], level: x.r[4], element: x.r[5], teams: x.r[6] ?? '', passes: x.r[7] ?? '', video: /^https?:/.test(x.r[9] || '') ? x.r[9] : '', reflections: x.r[10],
+      kind: 'Judging', supervisor: '' })));
   items.forEach((d, i) => { d.idx = i; });
   recordItems = items;
-  $('#recordList').innerHTML = items.length ? items.map(rowHtml).join('') : `<p class="muted">${isTraining ? 'No training searches logged yet.' : 'Nothing here yet.'}</p>`;
+  $('#recordList').innerHTML = items.length ? items.map(rowHtml).join('') : `<p class="muted">No searches where you set the hides yet.</p>`;
   const open = $('#openSheet');
   open.hidden = !s.fileId;
   if (s.fileId) open.href = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(s.fileId)}/edit`;
@@ -736,14 +775,52 @@ function cleanVideoLink(s) {
     return u.toString();
   } catch (_) { return s; }
 }
-/* Who set the hide(s): Me (default) or Someone else, who must be named. */
+/* Who set the hide(s), by search type:
+ *   Judging: Me (default) or Someone else, who must be named.
+ *   Stewarding with Intent: not asked. A SWI trainee never sets the hides, so the coaching judge is recorded.
+ *   Probationary Judging: Me or Coaching judge. Nothing pre-selected, so the trainee must tap one.
+ *   Mentoring: Me (default) or Mentoring judge.
+ * "Supervisor" saves the supervising judge's name (or "Coaching judge"/"Mentoring judge" if no name yet). */
+function setterOptions(kind) {
+  const form = TRAINING_FORMS[kind];
+  if (!form) return { opts: ['Me', 'Someone else'], def: 'Me' };
+  if (form.code === 'SWI') return { opts: [], def: 'Supervisor' };
+  if (form.code === 'PJ') return { opts: ['Me', 'Supervisor'], def: '' };
+  return { opts: ['Me', 'Supervisor'], def: 'Me' };
+}
+function renderSetter() {
+  const f = logForm(); const kind = chipValue(f, 'kind') || 'Judging'; const form = TRAINING_FORMS[kind];
+  const { opts, def } = setterOptions(kind);
+  const choice = f.dataset.setterTouched ? f.dataset.setterChoice : '';
+  const pick = opts.includes(choice) ? choice : def;
+  $('#setterBlock').hidden = !opts.length;
+  $('#setterHint').hidden = !(form && form.code === 'PJ');
+  $('#setterChips').innerHTML = opts.map((o, i) => `<input type="radio" name="setterQuick" id="setterQuick-${i}" value="${o}"${o === pick ? ' checked' : ''}>` +
+    `<label for="setterQuick-${i}">${esc(o === 'Supervisor' ? form.supervisorTitle : o)}</label>`).join('');
+  f.setter.hidden = pick !== 'Someone else';
+}
+function setterChoiceFrom(kind, setter, supervisor) {
+  const v = String(setter || '').trim().toLowerCase(); const form = TRAINING_FORMS[kind];
+  if (!v) return '';
+  if (v === 'me') return 'Me';
+  if (form && (v === String(supervisor || '').trim().toLowerCase() || v === 'coaching judge' || v === 'mentoring judge')) return 'Supervisor';
+  return 'Someone else';
+}
+function readSetter(f, kind) {
+  const form = TRAINING_FORMS[kind];
+  const c = form && form.code === 'SWI' ? 'Supervisor' : chipValue(f, 'setterQuick');
+  if (c === 'Me') return 'Me';
+  if (c === 'Supervisor') return f.supervisor.value.trim() || form.supervisorTitle;
+  if (c === 'Someone else') return f.setter.value.trim();
+  return '';
+}
 function wireSetter(f) {
   f.addEventListener('change', (ev) => {
     if (ev.target.name !== 'setterQuick') return;
+    f.dataset.setterChoice = ev.target.value; f.dataset.setterTouched = '1';
     const other = ev.target.value === 'Someone else';
     f.setter.hidden = !other;
-    if (other) { if (f.setter.value === 'Me') f.setter.value = ''; f.setter.focus(); }
-    else f.setter.value = 'Me';
+    if (other) f.setter.focus();
     saveDraft(f);
   });
 }
@@ -792,7 +869,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#syncBtnHome').addEventListener('click', syncNow);
   $('#syncBtnRecord').addEventListener('click', syncNow);
-  $('[data-view=record]').addEventListener('change', (e) => { if (e.target.name === 'recordTab') renderRecord(); });
 
   const f = logForm();
   wireYouTube(f); wireSetter(f);
@@ -804,9 +880,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const e = readLogForm();
     if (!e.level) { toast('Tap a Level.'); return; }
     if (!e.element) { toast('Tap an Element.'); return; }
-    if (chipValue(f, 'setterQuick') === 'Someone else' && (!e.setter || e.setter === 'Me')) { toast('Add the name of who set the hide(s).'); f.setter.focus(); return; }
+    if (!e.setter) {
+      if (chipValue(f, 'setterQuick') === 'Someone else') { toast('Add the name of who set the hide(s).'); f.setter.focus(); }
+      else { toast('Tap who set the hide(s).'); $('#setterBlock').scrollIntoView({ block: 'center' }); }
+      return;
+    }
+    if (chipValue(f, 'setterQuick') === 'Someone else' && e.setter.toLowerCase() === 'me') { toast('Add the name of who set the hide(s).'); f.setter.focus(); return; }
+    if (e.teams === '' || +e.teams < 1) { toast('Add the number of teams.'); f.teams.focus(); return; }
+    if (e.kind === 'Judging' && e.passes === '') { toast('Add the number of passes.'); f.passes.focus(); return; }
+    if (e.kind !== 'Judging' && e.setter === 'Me' && e.passes === '') { toast('You set the hides, so add Sourced in time (S).'); f.passes.focus(); return; }
     if (e.passes !== '' && +e.passes > +e.teams) { toast('Passes can\'t be more than teams.'); return; }
-    if (e.kind === 'Judging' && e.passes === '') { toast('Add the number of passes.'); return; }
     const form = TRAINING_FORMS[e.kind];
     if (form) {
       if (!e.supervisor) { toast(`Add your ${form.supervisorTitle.toLowerCase()}.`); return; }
