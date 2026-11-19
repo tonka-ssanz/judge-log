@@ -31,15 +31,16 @@
   <div id="homeTodo"></div>
   <div id="homeStatus"></div>
   <div class="tiles">
-    <a class="tile primary" href="#log"><b>Log a search</b><span>Judging or training. Works without signal. Sync when you're back online.</span></a>
+    <a class="tile primary" href="#log" id="logTile"><b>Log a search</b><span>Judging or training. Works without signal. Sync when you're back online.</span></a>
     <a class="tile" href="#training" id="trainingTile" hidden><b>My training</b><span id="trainingTileText">Your SWI, Probationary and Mentoring progress</span></a>
-    <a class="tile" href="#record"><b>My record</b><span>Past searches and pass rates</span></a>
-    <a class="tile" href="report.html"><b>Report a concern</b><span>Email the JDSC about a trial incident</span></a>
+    <a class="tile" href="#record" id="recordTile"><b>My record</b><span>Past searches and pass rates</span></a>
+    <a class="tile" href="report.html" id="concernTile"><b>Report a concern</b><span>Email the JDSC about a trial incident</span></a>
     <a class="tile" href="#admin" id="adminTile" hidden><b>JDSC admin</b><span id="adminTileText">Trainee requirements and records</span></a>
   </div>
   <div class="actions">
     <button class="btn ghost block" id="syncBtnHome">Sync now</button>
-    <a class="btn ghost block" href="#settings">My details and Judging Record</a>
+    <a class="btn ghost block" href="#settings" id="detailsBtnHome">My details and Judging Record</a>
+    <button class="btn ghost block" id="jdscSignOutHome" hidden>Sign out of the JDSC account</button>
   </div>
   <footer class="foot">Questions: <a href="mailto:ssanzjdsubcommittee@gmail.com">ssanzjdsubcommittee@gmail.com</a> · <a href="privacy.html">Privacy policy</a></footer>
 </section>
@@ -56,7 +57,7 @@
   <input type="text" id="setMember" inputmode="numeric">
   <div class="actions"><button class="btn" id="saveDetails">Save details</button></div>
 
-  <h2>My Judging Record</h2>
+  <h2 id="recordHeading">My Judging Record</h2>
   <div class="card" id="recordCard"></div>
   <div class="actions">
     <button class="btn" id="chooseRecord">Choose my Judging Record</button>

@@ -1,7 +1,7 @@
 /* Keeps the Judge Log working with no signal.
  * App files are served from the phone's cache and refreshed in the background
  * whenever there is signal. Bump VERSION when files are added or removed. */
-const VERSION = 'judge-log-v4';
+const VERSION = 'judge-log-v10';
 const APP_FILES = [
   './', 'index.html', 'report.html', 'privacy.html', 'styles.css', 'app.js', 'training-ui.js', 'forms.js', 'judges.js', 'training.js',
   'manifest.webmanifest', 'icon-192.png', 'icon-512.png',

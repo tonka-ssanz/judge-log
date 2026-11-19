@@ -111,11 +111,31 @@ function stageOf(data) {
   if (data.stage !== undefined) return data.stage;
   const tl = trainingLevelOf(data.level); if (!tl) return null;
   const sg = STAGE_GROUPS[tl];
-  const option = tl === 'Advanced/Excellent' ? 'Mentoring' : 'Probationary';
+  const option = 'Probationary';
   const settled = (c) => ['done', 'credit', 'na'].includes(c[0]);
   const swiDone = !sg.first || !data.grid[sg.first] || TRAINING_ELEMENTS.every((el) => data.grid[sg.first][el].every(settled));
   return swiDone ? { name: 'second', group: sg.second, kinds: kindsForOption(option), option, trainingLevel: tl, firstGroup: sg.first }
     : { name: 'SWI', group: sg.first, kinds: ['Stewarding with Intent'], option, trainingLevel: tl, secondGroup: sg.second };
+}
+/* The JDSC's sign-off for the stage on screen. */
+function stageSignoffHtml(st, isSwi) {
+  if (!st) return '';
+  if (isSwi) {
+    if (st.swiApproved) return `<p class="small signoff ok">SWIs approved by the JDSC: ${esc(st.swiApproved)}</p>`;
+    if (st.swiColumn && st.allSwiSettled) return `<p class="small signoff warn">All SWIs done. Waiting for the JDSC to approve them.</p>`;
+    return st.swiColumn ? `<p class="small muted signoff">The JDSC approves the SWIs once they're all done. The next stage opens then.</p>` : '';
+  }
+  return st.promoted ? `<p class="small signoff ok">Promoted: ${esc(st.promoted)}</p>` : '';
+}
+/* Every sign-off the JDSC has entered for this person, all levels. */
+function signoffsHtml(progress) {
+  const so = (progress && progress.signoffs) || {};
+  const rows = ['Novice', 'Intermediate', 'Advanced/Excellent'].filter((lv) => so[lv] && (so[lv].swi || so[lv].promoted));
+  if (!rows.length) return '';
+  return `<h2>JDSC sign-offs</h2><div class="card">` + rows.map((lv) =>
+    `<div class="entry"><div class="top"><span>${esc(lv)}</span></div><div class="meta">` +
+    [so[lv].swi ? `SWI's approved ${esc(so[lv].swi)}` : '', so[lv].promoted ? `Promoted ${esc(so[lv].promoted)}` : ''].filter(String).join(' · ') +
+    `</div></div>`).join('') + `</div>`;
 }
 /* Title for a stage, e.g. "Probationary or Mentoring – Intermediate". */
 function stageTitle(stage, group) {
@@ -144,24 +164,26 @@ function trainingView(data) {
       const g = e.kind === 'Stewarding with Intent' ? STAGE_GROUPS[tl].first : STAGE_GROUPS[tl].second;
       if (!g) return;
       if (!grid[g] || !grid[g][e.element]) return;
-      const i = grid[g][e.element].findIndex((c) => c[0] === 'todo');
-      if (i >= 0) grid[g][e.element][i] = [e.sent ? 'waiting' : 'logged', [e.host, nzDate(e.date), e.supervisor].filter(Boolean).join(' · '), null, e.kind];
+      let i = grid[g][e.element].findIndex((c) => c[0] === 'todo');
+      const extra = i < 0;
+      if (extra) i = grid[g][e.element].findIndex((c) => c[0] === 'na');
+      if (i >= 0) grid[g][e.element][i] = [e.sent ? 'waiting' : 'logged', [e.host, nzDate(e.date), e.supervisor].filter(Boolean).join(' · '), null, e.kind, extra];
     });
   // Only the stage the person is currently training for.
   const groups = TRAINING_GROUPS.filter(([g]) => grid[g] && current.includes(g)).map(([g]) => [g, stageTitle(stage, g)]);
   let need = 0, got = 0, waiting = 0;
   groups.filter(([g]) => current.includes(g)).forEach(([g]) => TRAINING_ELEMENTS.forEach((el) => grid[g][el].forEach((c) => {
-    if (c[0] === 'na') return; need++;
+    if (c[0] === 'na' || c[4]) return; need++;
     if (c[0] === 'done' || c[0] === 'credit') got++;
     if (c[0] === 'waiting' || c[0] === 'logged') waiting++;
   })));
   return { grid, groups, current, need, got, waiting, stage };
 }
 
-const DOT_LABEL = { done: 'Done', waiting: 'Waiting for supervisor', logged: 'Saved, not sent yet', booked: 'Booked', credit: 'Credited', check: 'Needs checking', todo: 'Still to do', na: 'Not needed' };
+const DOT_LABEL = { done: 'Done', waiting: 'Waiting for supervisor', logged: 'Saved, not sent yet', booked: 'Booked', credit: 'Waived', check: 'Needs checking', todo: 'Still to do', na: 'Not needed' };
 function dotHtml(c, el, n) {
-  const label = `${el} ${n}: ${DOT_LABEL[c[0]]}${c[1] ? ' – ' + c[1] : ''}`;
-  const dot = `<span class="dot ${c[0]}" role="img" aria-label="${esc(label)}" title="${esc(label)}"></span>`;
+  const label = `${el} ${n}: ${c[4] ? 'Extra – ' : ''}${DOT_LABEL[c[0]]}${c[1] ? ' – ' + c[1] : ''}`;
+  const dot = `<span class="dot ${c[0]}${c[4] ? ' extra' : ''}" role="img" aria-label="${esc(label)}" title="${esc(label)}"></span>`;
   return c[2] ? `<a href="#review/${encodeURIComponent(c[2])}" class="dotlink">${dot}</a>` : dot;
 }
 function gridHtml(v, opts = {}) {
@@ -175,7 +197,7 @@ function gridHtml(v, opts = {}) {
     }).join('');
     const details = [];
     TRAINING_ELEMENTS.forEach((el) => v.grid[g][el].forEach((c, i) => {
-      if (c[1]) details.push(`<li><b>${esc(el)} ${i + 1}</b> · ${esc(DOT_LABEL[c[0]])}${categoryOf(g, c) ? ` (${categoryOf(g, c)})` : ''}${c[1] !== DOT_LABEL[c[0]] ? ': ' + esc(c[1]) : ''}</li>`);
+      if (c[1]) details.push(`<li><b>${esc(el)} ${i + 1}</b>${c[4] ? ' (extra)' : ''} · ${esc(DOT_LABEL[c[0]])}${categoryOf(g, c) ? ` (${categoryOf(g, c)})` : ''}${c[1] !== DOT_LABEL[c[0]] ? ': ' + esc(c[1]) : ''}</li>`);
     }));
     html += `<div class="card prog"><h3>${esc(title)}</h3>${opts.stageNote || ''}${rows}` +
       (details.length ? `<details><summary class="small">Details</summary><ul class="small plain">${details.join('')}</ul></details>` : '') + `</div>`;
@@ -188,7 +210,7 @@ function categoryOf(g, c) {
   if (c[3]) return c[3] === 'Mentoring' ? 'Mentoring' : 'Probationary';
   return /\(mentor\)/i.test(c[1] || '') || g.startsWith('Mentoring') ? 'Mentoring' : 'Probationary';
 }
-const legendHtml = () => `<div class="legend small">${['done', 'waiting', 'logged', 'booked', 'credit', 'todo'].map((k) => `<span><span class="dot ${k}"></span> ${DOT_LABEL[k]}</span>`).join('')}</div>`;
+const legendHtml = () => `<div class="legend small">${['done', 'waiting', 'logged', 'booked', 'credit', 'todo'].map((k) => `<span><span class="dot ${k}"></span> ${DOT_LABEL[k]}</span>`).join('')}<span><span class="dot done extra"></span> Extra (more than required)</span></div>`;
 
 async function renderTraining() {
   const box = $('#trainingBody'); const s = settings();
@@ -211,9 +233,13 @@ async function renderTraining() {
   if (v.need) html += `<div class="card"><b class="big">${v.got} of ${v.need}</b> ${v.stage && v.stage.name === 'SWI' ? 'SWIs' : 'training searches'} signed off for your current stage` +
     (v.waiting ? `<p class="small" style="margin:6px 0 0">${v.waiting} more waiting for a supervisor's comments.</p>` : '') + `</div>`;
   const st = v.stage;
+  const next = st && st.secondGroup ? stageTitle(Object.assign({}, st, { kinds: kindsForOption(st.option) }), st.secondGroup).replace(/ – .*/, '') : '';
   const note = st && st.name === 'SWI' && st.secondGroup
-    ? `<p class="small muted" style="margin:0 0 6px">Once all your SWIs are signed off, ${esc(stageTitle(Object.assign({}, st, { kinds: kindsForOption(st.option) }), st.secondGroup).replace(/ – .*/, ''))} opens.</p>`
-    : st && st.kinds.length === 2 ? `<p class="small muted" style="margin:0 0 6px">The JDSC has approved Probationary Judging or Mentoring for you. Choose which when you log each one.</p>` : '';
+    ? (st.swiColumn && st.allSwiSettled
+      ? `<p class="small signoff warn" style="margin:0 0 6px">All your SWIs are done. ${esc(next)} opens once the JDSC approves them.</p>`
+      : `<p class="small muted" style="margin:0 0 6px">Once all your SWIs are signed off${st.swiColumn ? ' and approved by the JDSC' : ''}, ${esc(next)} opens.</p>`)
+    : (st && st.swiApproved ? `<p class="small signoff ok" style="margin:0 0 6px">SWIs approved by the JDSC: ${esc(st.swiApproved)}</p>` : '') +
+      (st && st.kinds.length === 2 ? `<p class="small muted" style="margin:0 0 6px">The JDSC has approved you for Probationary Judging or Mentoring. Choose which when you log each one.</p>` : '');
   html += legendHtml() + gridHtml(v, { stageNote: note });
   html += data.live
     ? `<p class="small muted">From the JDSC's records, updated ${new Date(data.at).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}. A dot fills in once your supervisor has added their comments.</p>`
@@ -271,7 +297,7 @@ async function renderTrainingTile() {
   const me = cachedMe();
   const level = (me && me.person && me.person.level) || (j && j.l) || (data && data.level) || '';
   const v = data ? trainingView(data) : null;
-  tile.hidden = !/trainee/i.test(level);
+  tile.hidden = isJdscAccount() || !/trainee/i.test(level);
   $('#trainingTileText').textContent = v && v.need
     ? `${v.got} of ${v.need} complete${v.waiting ? `, ${v.waiting} waiting` : ''}`
     : 'Your SWI, Probationary and Mentoring progress';
@@ -288,7 +314,7 @@ function renderHomeTodo() {
   // If we're already signed in, refresh quietly (no pop-up).
   if (CONFIG.apiUrl && tokenReady() && navigator.onLine && !refreshing && (!me || Date.now() - (me.at || 0) > 60000)) {
     refreshing = true;
-    refreshMe().then(() => { if (!$('[data-view=home]').hidden) { renderHomeTodo(); renderTrainingTile(); } }).catch(() => {}).finally(() => { refreshing = false; });
+    refreshMe().then(() => { if (!$('[data-view=home]').hidden) { renderHomeTodo(); renderTrainingTile(); if (!isJdscAccount()) renderWho(); } }).catch(() => {}).finally(() => { refreshing = false; });
   }
 }
 
@@ -507,20 +533,31 @@ async function renderAdmin(email) {
     }
   } catch (e) { box.innerHTML = `<div class="status warn"><span class="grow">${esc(e.message)}</span></div>`; }
 }
+/* All active judges, trainees first, then by level (highest first), then name. */
+const LEVEL_ORDER = ['excellent', 'advanced', 'intermediate', 'novice'];
+const levelRank = (l) => { const t = String(levelName(l) || '').toLowerCase(); const i = LEVEL_ORDER.findIndex((x) => t.startsWith(x)); return i < 0 ? 99 : i; };
+const byLevel = (a, b) => levelRank(a.level) - levelRank(b.level) || String(a.name).localeCompare(String(b.name));
 function adminListHtml(out) {
-  const trainees = out.people.filter((p) => /trainee/i.test(p.level) && p.status !== 'Resigned');
+  const active = out.people.filter((p) => p.status === 'Active');
+  const trainees = active.filter((p) => /trainee/i.test(p.level)).sort(byLevel);
+  const judges = active.filter((p) => !/trainee/i.test(p.level)).sort(byLevel);
   const personRow = (p) => `<a class="entry linkrow" href="#admin/${encodeURIComponent(p.email)}"><div class="top"><span>${esc(p.name)}</span><span>${esc(levelName(p.level))}</span></div>
-    <div class="meta">${esc(p.status)}${p.waiting ? ` · ${p.waiting} waiting for supervisor` : ''}</div></a>`;
+    ${p.waiting ? `<div class="meta">${p.waiting} waiting for supervisor</div>` : ''}</a>`;
   let html = `<p class="small muted">Signed in as ${esc((cachedMe() || {}).email || '')}. Changes are written straight into Judges and Trials (master).</p>`;
   if (out.waiting.length) html += `<h2>Waiting for supervisors</h2><div class="card">${out.waiting.map((r) => recordRow(r, `#review/${encodeURIComponent(r.id)}`, r.trainee)).join('')}</div>`;
-  html += `<h2>Trainees</h2><div class="card">${trainees.map(personRow).join('')}</div>`;
-  html += `<p class="small muted">To start someone's training, set their Level in the master sheet (for example "Nov Trainee").</p>`;
+  html += `<h2>In training (${trainees.length})</h2><div class="card">${trainees.map(personRow).join('') || '<p class="small muted">No one is training at the moment.</p>'}</div>`;
+  html += `<h2>Judges (${judges.length})</h2><div class="card">${judges.map(personRow).join('')}</div>`;
+  const others = out.people.filter((p) => p.status !== 'Active').sort(byLevel);
+  const otherRow = (p) => `<a class="entry linkrow" href="#admin/${encodeURIComponent(p.email)}"><div class="top"><span>${esc(p.name)}</span><span>${esc(levelName(p.level))}</span></div>
+    <div class="meta"><span class="pill ${p.status === 'Resigned' ? 'bad' : 'warn'}">${esc(p.status)}</span></div></a>`;
+  if (others.length) html += `<details class="card others"><summary>Inactive and resigned (${others.length})</summary>${others.map(otherRow).join('')}</details>`;
+  html += `<p class="small muted">The lists above show active judges. To change someone's level or status, edit their row in Judges and Trials (master): Level column for their level (for example "Nov Trainee" to start training); colour of their name for status (yellow = currently inactive, pink = resigned, no colour = active).</p>`;
   return html;
 }
 function adminPersonHtml(out) {
   const st = out.progress.stage;
   let html = `<div class="card"><b class="who-name">${esc(out.person.name)}</b><div class="who-status"><span class="who-level">${esc(levelName(out.person.level))}</span> <span class="pill ${out.person.status === 'Active' ? 'ok' : out.person.status === 'Resigned' ? 'bad' : 'warn'}">${esc(out.person.status)}</span></div></div>`;
-  if (!st) return html + `<div class="card"><p>Not currently training. To start their training, change their Level in the master sheet (for example to "Nov Trainee").</p></div><div class="actions"><a class="btn ghost block" href="#admin">Back to all trainees</a></div>`;
+  if (!st) return html + `<div class="card"><p>Not currently training. To start their training, change their Level in the master sheet (for example to "Nov Trainee").</p></div><div class="actions"><a class="btn ghost block" href="#admin">Back to all judges</a></div>`;
   const stages = [st.firstGroup || (st.name === 'SWI' ? st.group : null), st.secondGroup || (st.name === 'second' ? st.group : null)].filter(Boolean);
   stages.forEach((g, idx) => {
     const grid = out.progress.grid[g]; if (!grid) return;
@@ -528,49 +565,28 @@ function adminPersonHtml(out) {
     const current = g === st.group;
     const slots = Math.max(...TRAINING_ELEMENTS.map((el) => grid[el].length));
     let sets = 0;
-    for (let n = 1; n <= slots; n++) if (TRAINING_ELEMENTS.some((el) => grid[el][n - 1] && grid[el][n - 1][0] !== 'na')) sets = n;
+    for (let n = 1; n <= slots; n++) if (TRAINING_ELEMENTS.some((el) => grid[el][n - 1] && grid[el][n - 1][0] !== 'na' && !grid[el][n - 1][4])) sets = n;
     const title = isSwi ? `Stewarding with Intent – ${st.trainingLevel}` : stageTitle(Object.assign({}, st, { kinds: kindsForOption(st.option) }), g);
     html += `<div class="card prog"><h3>${idx + 1}. ${esc(title)}${current ? ' <span class="pill ok">Current stage</span>' : ''}</h3>`;
-    html += `<div class="setsrow"><span>Sets required<span class="hint">One set = Interior, Exterior, Container and Vehicle</span></span>
-      <span class="stepper"><button type="button" data-sets="${g}" data-d="-1" aria-label="One less set"${sets <= 0 ? ' disabled' : ''}>−</button><output>${sets}</output><button type="button" data-sets="${g}" data-d="1" aria-label="One more set"${sets >= slots ? ' disabled' : ''}>＋</button></span></div>`;
-    if (!isSwi && st.trainingLevel !== 'Novice') {
-      html += `<div class="setsrow"><span>Can be done as</span></div><div class="chips">` + ['Probationary', 'Mentoring', 'Either'].map((o) =>
-        `<button type="button" class="chipbtn" data-option="${o}" aria-pressed="${st.option === o}">${o === 'Either' ? 'Either' : o}</button>`).join('') + `</div>`;
-    }
+    html += `<div class="setsrow"><span>Sets required<span class="hint">One set = Interior, Exterior, Container and Vehicle</span></span><b>${sets}</b></div>`;
     html += TRAINING_ELEMENTS.map((el) => `<div class="prow"><span class="el">${esc(el)}</span><span class="dots">` +
-      grid[el].slice(0, sets).map((c, i) => {
-        const label = `${el} ${i + 1}: ${DOT_LABEL[c[0]]}${c[1] ? ' – ' + c[1] : ''}${categoryOf(g, c) ? ' (' + categoryOf(g, c) + ')' : ''}`;
-        return ['todo', 'credit'].includes(c[0])
-          ? `<button type="button" class="dotbtn" data-waive="${g}|${el}|${i + 1}" title="${esc(label)}" aria-label="${esc(label + (c[0] === 'todo' ? '. Tap to waive' : '. Tap to undo waiver'))}"><span class="dot ${c[0]}"></span></button>`
-          : `<span class="dot ${c[0]}" title="${esc(label)}" role="img" aria-label="${esc(label)}"></span>`;
+      grid[el].map((c, i) => [c, i]).filter(([c, i]) => (i < sets && c[0] !== 'na') || c[4]).map(([c, i]) => {
+        const label = `${el} ${i + 1}: ${c[4] ? 'Extra – ' : ''}${DOT_LABEL[c[0]]}${c[1] ? ' – ' + c[1] : ''}${categoryOf(g, c) ? ' (' + categoryOf(g, c) + ')' : ''}`;
+        const dot = `<span class="dot ${c[0]}${c[4] ? ' extra' : ''}" title="${esc(label)}" role="img" aria-label="${esc(label)}"></span>`;
+        return c[2] ? `<a href="#review/${encodeURIComponent(c[2])}" class="dotlink">${dot}</a>` : dot;
       }).join('') + `</span></div>`).join('');
-    html += `<p class="small muted" style="margin:8px 0 0">Tap an empty dot to waive that one requirement; tap a grey dot to undo.</p></div>`;
+    if (!isSwi && st.trainingLevel !== 'Novice') html += `<p class="small muted signoff">${out.person.canBeMentored ? 'Approved for Probationary or Mentoring.' : 'Probationary only.'}</p>`;
+    html += stageSignoffHtml(st, isSwi) + `</div>`;
   });
+  html += signoffsHtml(out.progress);
+  if (out.masterUrl) html += `<div class="actions"><a class="btn block" target="_blank" rel="noopener" href="${esc(out.masterUrl)}">Open their row in the master sheet</a></div>
+    <p class="small muted">Make all changes in Judges and Trials (master): "-" = not required, "Waived" = waived, a date in "Date SWI's Approved" opens the next stage, a date in "Date Promoted" when they pass. Then change their Level.</p>`;
   html += appointmentsHtml(out.person && out.appointments ? { appointments: out.appointments } : null);
   html += reportsHtml(out.records, out.person.email);
   if (out.records.length) html += `<h2>Training records</h2><div class="card">${out.records.map((r) => recordRow(r, `#review/${encodeURIComponent(r.id)}`)).join('')}</div>`;
-  html += `<div class="actions"><a class="btn ghost block" href="#admin">Back to all trainees</a></div>`;
+  html += `<div class="actions"><a class="btn ghost block" href="#admin">Back to all judges</a></div>`;
   return html;
 }
-function adminCall(action, data, btn) {
-  if (btn) btn.disabled = true;
-  return callApi(action, Object.assign({ email: adminState.person.person.email }, data))
-    .then((out) => { adminState.person.progress = out.progress; $('#adminBody').innerHTML = adminPersonHtml(adminState.person); toast('Saved to the master sheet.'); })
-    .catch((e) => { toast(e.message, 6000); if (btn) btn.disabled = false; });
-}
-function onAdminClick(ev) {
-  if (!adminState.person) return;
-  const sets = ev.target.closest('[data-sets]');
-  if (sets) {
-    const g = sets.dataset.sets; const cur = +sets.parentNode.querySelector('output').textContent;
-    adminCall('adminSetSets', { group: g, sets: cur + +sets.dataset.d }, sets); return;
-  }
-  const w = ev.target.closest('[data-waive]');
-  if (w) { const [k, l, el, n] = w.dataset.waive.split('|'); adminCall('adminToggleWaive', { group: `${k}|${l}`, element: el, n: +n }, w); return; }
-  const o = ev.target.closest('[data-option]');
-  if (o) adminCall('adminSetOption', { option: o.dataset.option }, o);
-}
-
-/* Any "Sync now" button inside these screens; admin slot changes. */
+/* Any "Sync now" button inside these screens. */
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-sync]')) syncNow(); });
-document.addEventListener('DOMContentLoaded', () => { $('#adminBody').addEventListener('click', onAdminClick); });
+

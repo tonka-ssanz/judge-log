@@ -148,6 +148,22 @@ function route() {
   if (name === 'admin') renderAdmin(arg ? decodeURIComponent(arg) : '');
 }
 
+/* ---------- the JDSC account ----------
+ * The JDSC Gmail is an admin account, not a judge: it has no Judging Record,
+ * so the app doesn't ask it to choose one or show judge-only screens. */
+const isJdscEmail = (e) => String(e || '').trim().toLowerCase() === CONFIG.jdsc;
+function isJdscAccount() {
+  const me = store.get('me', null);
+  return !!((me && (me.isAdmin || isJdscEmail(me.email))) || isJdscEmail(signedInEmail) || isJdscEmail(settings().email));
+}
+function signOutGoogle() {
+  if (accessToken && window.google) google.accounts.oauth2.revoke(accessToken, () => {});
+  accessToken = null; signedInEmail = ''; store.set('me', null);
+  const s = settings();
+  // If the JDSC address was typed into My details, take it out again.
+  if (isJdscEmail(s.email)) saveSettings({ email: '', consented2: false }); else saveSettings({ consented2: false });
+}
+
 /* ---------- home ---------- */
 function pendingCount() {
   const fileId = settings().fileId;
@@ -166,26 +182,50 @@ async function findJudge(s) {
   const e = await judgeCode(s.email), n = await judgeCode(s.name);
   return (e && JUDGES.find((j) => j.e === e)) || (n && JUDGES.find((j) => j.n === n)) || null;
 }
+/* Opening page: who the judge is and their current level.
+ * Uses the live JDSC record for the Google account they signed in with, if we have it,
+ * otherwise the judges list on the phone (matched on My details). */
 async function renderWho() {
   const box = $('#homeWho'); const s = settings();
   if (!box) return;
-  if (!s.name) { box.innerHTML = ''; return; }
-  const j = await findJudge(s);
-  let status;
-  if (j) {
-    const cls = j.s === 'Active' ? 'ok' : j.s === 'Resigned' ? 'bad' : 'warn';
-    status = `<span class="who-level">${esc(j.l)}</span> <span class="pill ${cls}">${esc(j.s)}</span>` +
-      (j.m ? ` <span class="pill">Can be mentored</span>` : '');
+  const me = store.get('me', null);
+  const live = me && me.person && me.person.level ? me.person : null;
+  const j = live ? null : await findJudge(s);
+  const name = (live && live.name) || s.name;
+  const level = live ? live.level : j && j.l;
+  const st = live ? live.status : j && j.s;
+  if (!name && !level) { box.innerHTML = ''; return; }
+  let body;
+  if (level) {
+    const lv = typeof levelName === 'function' ? levelName(level) : level;
+    const cls = st === 'Active' ? 'ok' : st === 'Resigned' ? 'bad' : 'warn';
+    body = `<div class="who-current"><span class="muted small">Current level</span><span class="who-level">${esc(lv)}</span></div>` +
+      `<div class="who-status">${st ? `<span class="pill ${cls}">${esc(st)}</span>` : ''}` +
+      ((j && j.m) || (live && live.canBeMentored) ? ` <span class="pill">Can be mentored</span>` : '') + `</div>`;
   } else {
-    status = `<span class="muted small">Not found on the SSANZ judges list. Check your name and email under <a href="#settings">My details</a>, or ask the JDSC.</span>`;
+    body = `<div class="who-status"><span class="muted small">Not found on the SSANZ judges list. Check your name and email under <a href="#settings">My details</a>, or ask the JDSC.</span></div>`;
   }
-  box.innerHTML = `<div class="card who"><b class="who-name">${esc(s.name)}</b><div class="who-status">${status}</div>` +
-    (j && typeof JUDGES_AS_AT !== 'undefined' ? `<div class="muted tiny">Judges list as at ${esc(JUDGES_AS_AT)}</div>` : '') + `</div>`;
+  const asAt = live ? `From the JDSC records, updated ${new Date(me.at).toLocaleDateString('en-NZ', { dateStyle: 'medium' })}`
+    : j && typeof JUDGES_AS_AT !== 'undefined' ? `Judges list as at ${esc(JUDGES_AS_AT)}` : '';
+  box.innerHTML = `<div class="card who"><b class="who-name">${esc(name || '')}</b>${body}` +
+    (asAt ? `<div class="muted tiny">${asAt}</div>` : '') + `</div>`;
 }
 
 function renderHome() {
   const s = settings(); const n = pendingCount();
-  renderWho(); renderTrainingTile(); renderHomeTodo();
+  const jdsc = isJdscAccount();
+  ['#logTile', '#recordTile', '#concernTile', '#syncBtnHome', '#detailsBtnHome'].forEach((id) => { $(id).hidden = jdsc; });
+  $('#jdscSignOutHome').hidden = !jdsc;
+  $('#adminTile').classList.toggle('primary', jdsc);
+  renderHomeTodo();
+  if (jdsc) {
+    $('#trainingTile').hidden = true;
+    $('#homeWho').innerHTML = `<div class="card who"><b class="who-name">JDSC account</b><div class="who-status muted small">Signed in with ${esc(CONFIG.jdsc)}</div></div>`;
+    $('#homeStatus').innerHTML = n
+      ? `<div class="status warn"><span class="grow">Your own judging entries are safe on this phone. Sign out of the JDSC account to get back to them.</span></div>` : '';
+    return;
+  }
+  renderWho(); renderTrainingTile();
   let html = '';
   if (!s.name) html += `<div class="status warn"><span class="grow">Welcome! Start by adding your name and choosing your Judging Record.</span><a class="btn small" href="#settings">Set up</a></div>`;
   else if (!s.fileId) html += `<div class="status warn"><span class="grow">Choose your Judging Record so entries can be saved to it.</span><a class="btn small" href="#settings">Choose</a></div>`;
@@ -206,6 +246,13 @@ function renderSettings() {
     : `<p>Not chosen yet. Tap the button below, sign in with the Google account your Judging Record is in, then pick your Judging Record.</p>`;
   $('#chooseRecord').textContent = s.fileId ? 'Choose a different Judging Record' : 'Choose my Judging Record';
   $('#signOut').hidden = !accessToken;
+  const jdsc = isJdscAccount();
+  $('#chooseRecord').hidden = jdsc;
+  if (jdsc) {
+    $('#recordCard').innerHTML = `<p>You're signed in with the JDSC account. It's an admin account, so it doesn't have a Judging Record.</p>
+      <p class="small muted">To log your own searches, sign out of the JDSC account and sign in with your own Google account.</p>`;
+    $('#signOut').hidden = false; $('#signOut').textContent = 'Sign out of the JDSC account';
+  } else $('#signOut').textContent = 'Sign out of Google on this phone';
 }
 
 /* ---------- Google sign-in and file picker ---------- */
@@ -262,6 +309,7 @@ function explainTokenError(e) {
 }
 
 function choosePicker() {
+  if (isJdscAccount()) { toast('The JDSC account doesn\'t have a Judging Record. Sign out of it first.', 5000); return; }
   getToken().then((token) => {
     if (!pickerReady) { toast('Connecting to Google… tap again in a moment.'); return; }
     const P = google.picker;
@@ -510,9 +558,16 @@ function readExtras() {
   });
   return out;
 }
-function fillSupervisors() {
+/* Supervising judge suggestions: active judges only (status from the SSANZ judges list). */
+async function fillSupervisors() {
   const names = typeof JUDGE_NAMES !== 'undefined' ? JUDGE_NAMES : [];
-  $('#supList').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
+  const active = [];
+  for (const n of names) {
+    const code = await judgeCode(n);
+    const j = typeof JUDGES !== 'undefined' && JUDGES.find((x) => x.n === code);
+    if (j && j.s === 'Active') active.push(n);
+  }
+  $('#supList').innerHTML = active.map((n) => `<option value="${esc(n)}">`).join('');
 }
 function readLogForm() {
   const f = logForm();
@@ -629,8 +684,11 @@ document.addEventListener('DOMContentLoaded', () => {
     choosePicker();
   });
   $('#signOut').addEventListener('click', () => {
-    if (accessToken && window.google) google.accounts.oauth2.revoke(accessToken, () => {});
-    accessToken = null; signedInEmail = ''; store.set('me', null); saveSettings({ consented2: false }); renderSettings(); toast('Signed out of Google on this phone.');
+    const wasJdsc = isJdscAccount();
+    signOutGoogle(); renderSettings(); toast(wasJdsc ? 'Signed out of the JDSC account.' : 'Signed out of Google on this phone.');
+  });
+  $('#jdscSignOutHome').addEventListener('click', () => {
+    signOutGoogle(); renderHome(); toast('Signed out of the JDSC account.');
   });
   $('#syncBtnHome').addEventListener('click', syncNow);
   $('#syncBtnRecord').addEventListener('click', syncNow);
