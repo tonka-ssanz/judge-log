@@ -199,3 +199,8 @@ table.summary td { padding: 5px 4px; border-top: 1px solid var(--line); vertical
 .refl-head { margin: 26px 0 0; }
 /* Show the voice tip once, under the last reflections box. */
 [data-refl]:not(#fReflOther) + .mic + p.small, [data-refl]:not(#fReflOther) + p.small { display: none; }
+
+/* Development modules (v24) */
+.modbar { height: 6px; background: var(--line); border-radius: 3px; margin: 8px 0 2px; overflow: hidden; }
+.modbar i { display: block; height: 6px; background: var(--accent); border-radius: 3px; }
+select.modlink { flex: 1; min-width: 0; min-height: 38px; font-size: 15px; border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px; background: var(--card, #fff); color: inherit; }

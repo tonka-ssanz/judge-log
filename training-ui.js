@@ -245,6 +245,7 @@ async function renderTraining() {
     ? `<p class="small muted">From the JDSC's records, updated ${new Date(data.at).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}. A dot fills in once your supervisor has added their comments.</p>`
     : `<p class="small muted">From the JDSC's records as at ${esc(TRAINING_AS_AT)}. Tap Sync now for the latest.</p>`;
   html += `<div class="actions"><a class="btn block" href="#log/new-training">Log a training search</a><button class="btn ghost block" data-sync>Sync now</button></div>`;
+  html += modulesHtml(me && me.modules);
   html += appointmentsHtml(me);
   // The trainee's own records, newest first.
   const sentIds = new Set(((me || {}).records || []).map((r) => r.id));
@@ -548,6 +549,7 @@ async function renderAdmin(email) {
       const out = await callApi('adminPeople');
       adminState.people = out.people; adminState.waiting = out.waiting;
       box.innerHTML = adminListHtml(out);
+      loadAdminModules();
     }
   } catch (e) { box.innerHTML = `<div class="status warn"><span class="grow">${esc(e.message)}</span></div>`; }
 }
@@ -562,6 +564,7 @@ function adminListHtml(out) {
   const personRow = (p) => `<a class="entry linkrow" href="#admin/${encodeURIComponent(p.email)}"${/trainee/i.test(p.level) ? ' data-trainee' : ''}><div class="top"><span>${esc(p.name)}</span><span>${esc(levelName(p.level))}</span></div>
     ${p.waiting ? `<div class="meta">${p.waiting} waiting for supervisor</div>` : ''}</a>`;
   let html = `<p class="small muted">Signed in as ${esc((cachedMe() || {}).email || '')}. Changes are made in Judges and Trials (master).</p>`;
+  html += `<div id="adminModules"></div>`;
   if (out.waiting.length) html += `<h2>Waiting for supervisors</h2><div class="card">${out.waiting.map((r) => recordRow(r, `#review/${encodeURIComponent(r.id)}`, r.trainee)).join('')}</div>`;
   html += `<h2>Judges</h2><div class="chips" role="group" aria-label="Show">` +
     `<button type="button" class="chipbtn" data-judges="all" aria-pressed="${!only}">All judges (${active.length})</button>` +
@@ -606,6 +609,7 @@ function adminPersonHtml(out) {
     if (!isSwi && st.trainingLevel !== 'Novice') html += `<p class="small muted signoff">${out.person.canBeMentored ? 'Approved for Probationary or Mentoring.' : 'Probationary only.'}</p>`;
     html += stageSignoffHtml(st, isSwi) + `</div>`;
   });
+  html += modulesHtml(out.modules, true);
   html += signoffsHtml(out.progress);
   if (out.masterUrl) html += `<div class="actions"><a class="btn block" target="_blank" rel="noopener" href="${esc(out.masterUrl)}">Open their row in the master sheet</a></div>
     <p class="small muted">Make all changes in Judges and Trials (master): "-" = not required, "Waived" = waived, a date in "Date SWI's Approved" opens the next stage, a date in "Date Promoted" when they pass. Then change their Level.</p>`;
@@ -618,3 +622,85 @@ function adminPersonHtml(out) {
 /* Any "Sync now" button inside these screens. */
 document.addEventListener('click', (ev) => { if (ev.target.closest('[data-sync]')) syncNow(); });
 
+
+
+/* ---------- development modules ---------- */
+/* States from the helper: todo, retry (score below full marks), complete (full marks, waiting for the JDSC),
+ * submitted (Module 5, waiting for appraisal), approved (in the master sheet), waived. */
+const MOD_PILL = { approved: ['ok', 'Approved'], waived: ['ok', 'Waived'], complete: ['warn', 'Waiting for JDSC'],
+  submitted: ['warn', 'Waiting for appraisal'], retry: ['bad', 'Try again'], redo: ['bad', 'To be redone'], todo: ['', 'Still to do'] };
+const modScore = (o) => (o.score !== undefined && o.score !== null && o.max ? `${o.score}/${o.max}` : '');
+function moduleRowHtml(o, admin) {
+  const [cls, label] = MOD_PILL[o.state] || ['', o.state];
+  const bits = [];
+  if (o.role) bits.push(o.role);
+  if (o.note) bits.push(o.note);
+  if (modScore(o)) bits.push(modScore(o));
+  if (o.at) bits.push(nzDate(o.at));
+  if (o.attempts > 1) bits.push(`${o.attempts} attempts`);
+  let msg = '';
+  if (o.state === 'retry') msg = `<p class="small signoff warn" style="margin:6px 0 0">${admin ? 'Not all questions answered correctly yet.' : `You scored ${esc(modScore(o))}. All questions need to be answered correctly before the JDSC can approve this module.`}</p>`;
+  if (o.state === 'redo') msg = `<p class="small signoff warn" style="margin:6px 0 0">${admin ? 'Marked in the master sheet as to be repeated.' : 'The JDSC has asked you to do this module again.'}</p>`;
+  if (o.state === 'complete') msg = admin ? '' : `<p class="small muted" style="margin:6px 0 0">Well done. The JDSC will approve it.</p>`;
+  if (o.state === 'submitted') msg = admin ? '' : `<p class="small muted" style="margin:6px 0 0">Your answers are with the JDSC to appraise.</p>`;
+  if (o.state === 'todo' && o.appraised && !admin) msg = `<p class="small muted" style="margin:6px 0 0">Appraised by the JDSC (not marked automatically).</p>`;
+  const btn = !admin && ['todo', 'retry', 'redo'].includes(o.state)
+    ? `<a class="btn small" target="_blank" rel="noopener" href="${esc(o.url)}">${o.state === 'todo' ? 'Open module ↗' : 'Try again ↗'}</a>` : '';
+  const answers = admin && o.answers && o.answers.length
+    ? `<details><summary class="small">Read answers</summary><div class="small">${o.answers.map((x) => `<p style="margin:8px 0 0"><b>${esc(x.q)}</b><br>${esc(x.a || '(no answer)').replace(/\n/g, '<br>')}</p>`).join('')}</div></details>` : '';
+  return `<div class="entry"><div class="top"><span>${esc(o.label)}</span></div>` +
+    (bits.length ? `<div class="meta">${esc(bits.join(' · '))}</div>` : '') +
+    `<div class="row-actions"><span class="pill ${cls}">${esc(label)}</span>${btn}</div>${msg}${answers}</div>`;
+}
+function modulesHtml(mods, admin) {
+  if (!mods || !mods.list || !mods.list.length) return '';
+  const pct = Math.round(100 * mods.approved / mods.total);
+  return `<h2>Development modules – ${esc(mods.level)}</h2><div class="card">` +
+    `<p style="margin:0"><b class="big">${mods.approved} of ${mods.total}</b> approved by the JDSC</p>` +
+    `<div class="modbar" role="img" aria-label="${pct}% approved"><i style="width:${pct}%"></i></div>` +
+    mods.list.map((o) => moduleRowHtml(o, admin)).join('') + `</div>` +
+    (admin ? `<p class="small muted">Approve by entering it in the master sheet, column "${esc(mods.masterColumn || 'Novice Modules')}" (e.g. "1-5", "Int & Int/Adv", "Waived").</p>`
+      : `<p class="small muted">Scores come from the module forms (sign in to Google with the email the JDSC has for you). “Approved” appears once the JDSC has recorded it.</p>`);
+}
+
+/* JDSC admin list: modules waiting for approval, and form emails that don't match anyone. */
+async function loadAdminModules() {
+  const box = $('#adminModules'); if (!box) return;
+  box.innerHTML = '<p class="small muted">Checking development modules…</p>';
+  let out;
+  try { out = await callApi('adminModules'); } catch (e) { box.innerHTML = `<p class="small muted">Development modules couldn't be loaded: ${esc(e.message)}</p>`; return; }
+  adminState.modules = out;
+  let html = '';
+  if (out.waiting.length) {
+    html += `<h2>Modules waiting for approval</h2><div class="card">` + out.waiting.map((t) => {
+      const items = t.modules.list.filter((o) => o.state === 'complete' || o.state === 'submitted');
+      return `<div class="entry"><div class="top"><a href="#admin/${encodeURIComponent(t.email)}">${esc(t.name)}</a><span>${esc(t.level)}</span></div>` +
+        `<div class="meta">${t.allDone ? 'All modules done' : `${t.modules.approved + items.length} of ${t.modules.total} done`}</div>` +
+        items.map((o) => `<div class="small" style="margin-top:6px">${esc(o.label)} · ${o.state === 'submitted' ? 'to appraise' : esc(modScore(o))} · ${esc(nzDate(o.at))}</div>` +
+          (o.answers && o.answers.length ? `<details><summary class="small">Read answers</summary><div class="small">${o.answers.map((x) => `<p style="margin:8px 0 0"><b>${esc(x.q)}</b><br>${esc(x.a || '(no answer)').replace(/\n/g, '<br>')}</p>`).join('')}</div></details>` : '')).join('') +
+        `</div>`;
+    }).join('') + `</div><p class="small muted">Approve in the master sheet ("Novice Modules" or "Interm Module" column). Gaye is emailed when a Novice trainee finishes all 5; the JDSC for Intermediate and Advanced/Excellent. Reminders go every Monday morning.</p>`;
+  }
+  if (out.unmatched.length) {
+    const opts = `<option value="">Link to…</option>` + out.people.slice().sort((a, b) => a.name.localeCompare(b.name))
+      .map((p) => `<option value="${esc(p.email)}">${esc(p.name)} (${esc(levelName(p.level))})</option>`).join('');
+    html += `<h2>Unmatched form emails</h2><div class="card">` + out.unmatched.map((u) =>
+      `<div class="entry" data-unmatched="${esc(u.email)}"><div class="top"><span>${esc(u.email)}</span></div>
+        <div class="meta">${esc(u.modules.map((k) => ({ N1: 'Module 1', N2: 'Module 2', N3: 'Module 3', N4: 'Module 4', N5: 'Module 5', I1: 'Intermediate', IA: 'Int & Adv' }[k] || k)).join(', '))}${u.names.length ? ' · name given: ' + esc(u.names.join(', ')) : ''} · last ${esc(nzDate(u.last))}</div>
+        <div class="row-actions"><select class="modlink" aria-label="Judge for ${esc(u.email)}">${opts}</select><button class="btn small" data-link-email="${esc(u.email)}">Link</button></div></div>`).join('') +
+      `</div><p class="small muted">These emails were used in the module forms but don't match anyone in the master sheet. Linking one adds it to the Sign-in Emails tab, so their results show against the right judge (and they can also sign in to the Judge Log with it).</p>`;
+  }
+  box.innerHTML = html;
+}
+document.addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-link-email]'); if (!b) return;
+  const row = b.closest('[data-unmatched]');
+  const person = $('select', row).value;
+  if (!person) { toast('Choose the judge first.'); return; }
+  b.disabled = true; b.textContent = 'Linking…';
+  try {
+    const out = await callApi('adminLinkEmail', { email: b.dataset.linkEmail, person });
+    toast(`${out.linked.email} linked to ${out.linked.name}.`);
+    loadAdminModules();
+  } catch (e) { b.disabled = false; b.textContent = 'Link'; toast(e.message, 6000); }
+});
