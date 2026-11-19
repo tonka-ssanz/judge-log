@@ -245,7 +245,7 @@ async function renderTraining() {
     ? `<p class="small muted">From the JDSC's records, updated ${new Date(data.at).toLocaleString('en-NZ', { dateStyle: 'medium', timeStyle: 'short' })}. A dot fills in once your supervisor has added their comments.</p>`
     : `<p class="small muted">From the JDSC's records as at ${esc(TRAINING_AS_AT)}. Tap Sync now for the latest.</p>`;
   html += `<div class="actions"><a class="btn block" href="#log/new-training">Log a training search</a><button class="btn ghost block" data-sync>Sync now</button></div>`;
-  html += modulesHtml(me && me.modules);
+  html += me && me.modulesError ? `<h2>Development modules</h2><div class="status warn"><span class="grow">Your modules couldn't be loaded: ${esc(me.modulesError)}. Tap Sync now to try again.</span></div>` : modulesHtml(me && me.modules);
   html += appointmentsHtml(me);
   // The trainee's own records, newest first.
   const sentIds = new Set(((me || {}).records || []).map((r) => r.id));
@@ -258,6 +258,11 @@ async function renderTraining() {
   }
   if (me && me.records) html += reportsHtml(me.records, 'me');
   box.innerHTML = html;
+  // Saved before modules were added (v24): fetch fresh data once, quietly, then redraw.
+  if (me && !('modules' in me) && !renderTraining.refetched && navigator.onLine && tokenReady()) {
+    renderTraining.refetched = true;
+    refreshMe().then(() => { if (!$('[data-view=training]').hidden) renderTraining(); }).catch(() => {});
+  }
 }
 /* Approved appointments from the JDSC's yearly Trials tabs. */
 const APPT_CLASS = { Upcoming: '', 'Signed off': 'ok', 'Waiting for supervisor': 'warn', 'Record to send': 'bad', Completed: '' };
