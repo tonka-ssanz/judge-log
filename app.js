@@ -768,5 +768,21 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('offline', renderHome);
   loadGoogle();
   route();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    // When a new version of the app has been downloaded, switch to it: straight away if the page has only
+    // just opened, otherwise offer a "Reload" so nothing being typed is interrupted.
+    const openedAt = Date.now();
+    const hadController = !!navigator.serviceWorker.controller;
+    let switched = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || switched) return;
+      switched = true;
+      if (Date.now() - openedAt < 15000) { location.reload(); return; }
+      const t = $('#toast');
+      t.innerHTML = 'A new version of the Judge Log is ready. <button class="btn small" id="reloadNow">Reload</button>';
+      t.hidden = false; clearTimeout(toastTimer);
+      $('#reloadNow').addEventListener('click', () => location.reload());
+    });
+    navigator.serviceWorker.register('sw.js').then((reg) => reg.update()).catch(() => {});
+  }
 });
