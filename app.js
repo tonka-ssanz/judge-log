@@ -553,7 +553,8 @@ function openLogForm(id) {
   setChip(f, 'tab', (v.kind && v.kind !== 'Judging') ? (settings().lastTab || 'SSANZ') : (v.tab || settings().lastTab || 'SSANZ'));
   f.supervisor.value = v.supervisor || '';
   f.date.value = v.date || today();
-  ['host', 'location', 'setter', 'teams', 'passes', 'video', 'reflections'].forEach((k) => { f[k].value = v[k] == null ? '' : v[k]; });
+  ['host', 'location', 'setter', 'teams', 'passes', 'video'].forEach((k) => { f[k].value = v[k] == null ? '' : v[k]; });
+  fillReflections(f, v.reflections);
   // Who set the hide(s): Me (default) or Someone else. Older entries may hold a name; keep it unless the judge taps a tile.
   if (!f.setter.value) f.setter.value = 'Me';
   setChip(f, 'setterQuick', f.setter.value === 'Me' ? 'Me' : 'Someone else');
@@ -585,6 +586,25 @@ function showKind(values) {
   }).join('') : '';
   addVoice(box);
 }
+/* Reflections: four boxes, saved together in the one Reflections column with a heading for each.
+ * Older entries (no headings) open in "Other general points". */
+const REFL_PARTS = [['env', 'Environmental conditions'], ['odour', 'Odour movement and how dogs worked it'], ['learning', 'Learning and curiosity'], ['other', 'Other general points']];
+function readReflections(f) {
+  return REFL_PARTS.map(([k, title]) => {
+    const t = f.querySelector(`[data-refl="${k}"]`).value.trim();
+    return t ? `${title}:\n${t}` : '';
+  }).filter(Boolean).join('\n\n');
+}
+function fillReflections(f, text) {
+  const parts = {}; let cur = null; const loose = [];
+  String(text || '').split('\n').forEach((line) => {
+    const hit = REFL_PARTS.find(([, title]) => line.trim() === title + ':');
+    if (hit) { cur = hit[0]; parts[cur] = []; return; }
+    (cur ? parts[cur] : loose).push(line);
+  });
+  if (loose.join('').trim()) parts.other = loose.concat(parts.other ? ['', ...parts.other] : []);
+  REFL_PARTS.forEach(([k]) => { f.querySelector(`[data-refl="${k}"]`).value = (parts[k] || []).join('\n').trim(); });
+}
 function readExtras() {
   const out = {};
   $$('#trainingExtras [data-x]').forEach((el) => {
@@ -613,7 +633,7 @@ function readLogForm() {
     id: f.entryId.value || uid(), kind, tab: kind === 'Judging' ? (chipValue(f, 'tab') || 'SSANZ') : CONFIG.trainingTab,
     supervisor: kind === 'Judging' ? '' : f.supervisor.value.trim(), extras: kind === 'Judging' ? {} : readExtras(), date: f.date.value, host: f.host.value.trim(), location: f.location.value.trim(),
     setter: f.setter.value.trim(), level: chipValue(f, 'level'), element: elementValue(f), teams: f.teams.value, passes: f.passes.value,
-    video: f.video.value.trim(), reflections: f.reflections.value.trim(),
+    video: f.video.value.trim(), reflections: readReflections(f),
   };
 }
 function updateRate() {

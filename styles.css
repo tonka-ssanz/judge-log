@@ -188,3 +188,6 @@ table.summary td { padding: 5px 4px; border-top: 1px solid var(--line); vertical
 .trainees-only > .entry:not([data-trainee]) { display: none; }
 .yt-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .yt-note { margin: 8px 0; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); font-size: 14px; }
+.refl-head { margin: 26px 0 0; }
+/* Show the voice tip once, under the last reflections box. */
+[data-refl]:not(#fReflOther) + .mic + p.small, [data-refl]:not(#fReflOther) + p.small { display: none; }

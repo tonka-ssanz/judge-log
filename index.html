@@ -127,8 +127,15 @@
     <input type="url" id="fVideo" name="video" inputmode="url" placeholder="https://youtube.com/shorts/…">
 
     <div id="trainingExtras" hidden></div>
-    <label class="f" for="fRefl" id="reflLabel">Reflections</label>
-    <textarea id="fRefl" name="reflections" data-voice placeholder="What went well? What would you do differently?"></textarea>
+    <h3 class="refl-head" id="reflLabel">Reflections</h3>
+    <label class="f" for="fReflEnv">Environmental conditions<span class="hint">Including how changes affected the search over time</span></label>
+    <textarea id="fReflEnv" data-refl="env" data-voice></textarea>
+    <label class="f" for="fReflOdour">Odour movement and how dogs worked it<span class="hint">What you observed</span></label>
+    <textarea id="fReflOdour" data-refl="odour" data-voice></textarea>
+    <label class="f" for="fReflLearn">Learning and curiosity<span class="hint">What you learnt, or anything you're curious about</span></label>
+    <textarea id="fReflLearn" data-refl="learning" data-voice></textarea>
+    <label class="f" for="fReflOther">Other general points</label>
+    <textarea id="fReflOther" data-refl="other" data-voice></textarea>
 
     <div class="actions">
       <button class="btn block" type="submit">Save</button>
