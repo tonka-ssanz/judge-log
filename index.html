@@ -35,6 +35,7 @@
     <a class="tile" href="#training" id="trainingTile" hidden><b>My training</b><span id="trainingTileText">Your SWI, Probationary and Mentoring progress</span></a>
     <a class="tile" href="#record" id="recordTile"><b>My record</b><span>Past searches and pass rates</span></a>
     <a class="tile" href="report.html" id="concernTile"><b>Notify SSANZ</b><span>Dog fouling or another matter at a trial</span></a>
+    <a class="tile" href="reference.html" id="searchTile"><b>Search</b><span>Beyond the Sniff and the Regs. Works without signal.</span></a>
     <a class="tile" href="#admin" id="adminTile" hidden><b>JDSC admin</b><span id="adminTileText">Trainee requirements and records</span></a>
   </div>
   <div class="actions" id="homeActions">
@@ -175,5 +176,7 @@
 <script src="training.js"></script>
 <script src="app.js"></script>
 <script src="training-ui.js"></script>
+<script src="reference-sync.js"></script>
+<script>window.addEventListener('load', () => setTimeout(() => window.RefSync && RefSync.syncIfDue(6), 4000));</script>
 </body>
 </html>

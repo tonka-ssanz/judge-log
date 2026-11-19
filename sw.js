@@ -1,9 +1,10 @@
 /* Keeps the Judge Log working with no signal.
  * App files are served from the phone's cache and refreshed in the background
- * whenever there is signal. Bump VERSION when files are added or removed. */
-const VERSION = 'judge-log-v17';
+ * whenever there is signal. Bump VERSION when files are added or removed.
+ * 'judge-log-ref' holds the latest Beyond the Sniff for Search (see reference-sync.js) and is kept between versions. */
+const VERSION = 'judge-log-v18';
 const APP_FILES = [
-  './', 'index.html', 'report.html', 'privacy.html', 'styles.css', 'app.js', 'training-ui.js', 'forms.js', 'judges.js', 'training.js',
+  './', 'index.html', 'report.html', 'reference.html', 'reference-data.js', 'reference-sync.js', 'privacy.html', 'styles.css', 'app.js', 'training-ui.js', 'forms.js', 'judges.js', 'training.js',
   'manifest.webmanifest', 'icon-192.png', 'icon-512.png',
 ];
 
@@ -13,7 +14,7 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== 'judge-log-fonts').map((k) => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION && k !== 'judge-log-fonts' && k !== 'judge-log-ref').map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

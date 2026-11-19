@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en-NZ">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Search · SSANZ Judge Log</title>
+<meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .searchbar { position: sticky; top: 62px; z-index: 4; background: var(--bg); padding: 12px 0 8px; }
+  .filters { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .sbox { position: relative; }
+  #q { width: 100%; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 44px 12px 12px; min-height: 48px; }
+  #q::-webkit-search-cancel-button { display: none; }
+  #q:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--muted); font-size: 24px; padding: 4px 10px; cursor: pointer; }
+  .filt { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .filt .chipbtn { padding: 5px 12px; font-size: 14px; }
+  .count { margin: 12px 0 4px; }
+  .doc-h { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 20px; margin: 22px 0 4px; }
+  .grp { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  .tag { font-family: var(--font-body); font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; text-transform: uppercase; letter-spacing: .03em; flex: none; }
+  .tag.c { background: var(--accent-soft); color: var(--accent); }
+  .tag.r { background: var(--warn-soft); color: var(--warn); }
+  .tag.b { background: #e5eef7; color: #2b5c8a; }
+  @media (prefers-color-scheme: dark) { .tag.b { background: #1f2e3d; color: #8fbbe6; } }
+  details.sec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); margin: 8px 0; }
+  details.sec > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; gap: 8px; align-items: baseline; }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary::before { content: "›"; color: var(--muted); font-weight: 700; display: inline-block; transition: transform .15s; }
+  details.sec[open] > summary::before { transform: rotate(90deg); }
+  .st { font-weight: 700; flex: 1; }
+  .hits { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .snip { font-size: 14px; color: var(--muted); padding: 0 14px 12px 30px; margin-top: -4px; }
+  details.sec[open] .snip { display: none; }
+  .body { padding: 2px 16px 14px 30px; border-top: 1px solid var(--line); }
+  .body p { margin: 10px 0; } .body ul { margin: 8px 0; padding-left: 20px; } .body li { margin: 6px 0; }
+  mark { background: #ffe27a; color: inherit; border-radius: 2px; padding: 0 1px; }
+  @media (prefers-color-scheme: dark) { mark { background: #7a6414; } }
+  figure { margin: 12px 0; }
+  figure img, .grid img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: zoom-in; }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 8px 0 14px; }
+  .tbl { overflow-x: auto; margin: 10px 0; }
+  .tbl table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  .tbl td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+  .tbl td p { margin: 4px 0; } .tbl td ul { margin: 4px 0; padding-left: 18px; }
+  @media (max-width: 600px) {
+    .tbl table.stack, .tbl table.stack tbody, .tbl table.stack tr, .tbl table.stack td { display: block; width: auto; }
+    .tbl table.stack tr:first-child { display: none; }
+    .tbl table.stack tr { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 10px; padding: 4px 0; }
+    .tbl table.stack td { border: 0; padding: 4px 10px; }
+    .tbl table.stack td::before { content: attr(data-h); display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .tbl table.stack td:first-child { font-weight: 700; font-size: 17px; }
+    .tbl table.stack td:first-child::before { display: none; }
+  }
+  .body li.l1 { margin-left: 18px; } .body li.l2 { margin-left: 36px; } .body li.l3 { margin-left: 54px; }
+  .body img { display: inline-block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: zoom-in; vertical-align: top; }
+  .body img.missing { display: block; width: 100%; height: auto; min-height: 64px; aspect-ratio: auto !important; border-style: dashed; background: var(--bg); color: var(--muted); font-size: 14px; padding: 12px; cursor: default; }
+  .upd { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+  .upd .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
+  .upd.busy .dot { background: var(--warn); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .links { display: grid; gap: 8px; margin: 24px 0 8px; }
+  #lb { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.92); display: none; overflow: auto; -webkit-overflow-scrolling: touch; }
+  #lb img { display: block; width: 100%; height: auto; background: #fff; }
+  #lb.big img { width: 200%; }
+  #lbbar { position: fixed; top: max(10px, env(safe-area-inset-top)); right: 10px; z-index: 21; display: none; gap: 8px; }
+  #lbbar button { border: 0; border-radius: 999px; width: 46px; height: 46px; font-size: 22px; background: #fff; color: #000; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="row">
+    <a class="back" href="./#home">‹ Home</a>
+    <h1>Search<small>Regs and guides · works without signal</small></h1>
+  </div>
+</header>
+<main class="wrap">
+  <div class="searchbar">
+    <div class="sbox">
+      <input id="q" type="search" placeholder="Search e.g. vehicle height, sand, finish" autocomplete="off" aria-label="Search the regs and guides">
+      <button id="clear" type="button" aria-label="Clear search" hidden>×</button>
+    </div>
+  </div>
+  <div class="filters">
+    <div class="filt" id="docF">
+      <button class="chipbtn" type="button" data-d="all" aria-pressed="true">All</button>
+      <button class="chipbtn" type="button" data-d="c" aria-pressed="false">Beyond the Sniff</button>
+      <button class="chipbtn" type="button" data-d="r" aria-pressed="false">Nosework Regs</button>
+      <button class="chipbtn" type="button" data-d="b" aria-pressed="false">Buried Hide Regs</button>
+    </div>
+    <div class="filt" id="lvlF">
+      <button class="chipbtn" type="button" data-l="novice" aria-pressed="false">Novice</button>
+      <button class="chipbtn" type="button" data-l="intermediate" aria-pressed="false">Intermediate</button>
+      <button class="chipbtn" type="button" data-l="advanced" aria-pressed="false">Advanced</button>
+      <button class="chipbtn" type="button" data-l="excellent" aria-pressed="false">Excellent</button>
+      <button class="chipbtn" type="button" data-l="premium" aria-pressed="false">Premium</button>
+    </div>
+    <div class="upd" id="upd"><span class="dot"></span><span id="updText"></span></div>
+  </div>
+  <p class="count muted small" id="count"></p>
+  <div id="out"></div>
+
+  <div class="links">
+    <a class="btn ghost" href="https://docs.google.com/document/d/19Ly3LyUzZQneKo-JpajGIwoud2_gAkpSYqB3_TY8MRc/edit?usp=sharing" target="_blank" rel="noopener">Open Beyond the Sniff (Google Doc) ↗</a>
+    <a class="btn ghost" href="https://drive.google.com/file/d/1ey4mXiLxQN4-tLxn9AdJgvK4WYAG8cmP/view?usp=drive_link" target="_blank" rel="noopener">Open Nosework Regs (PDF) ↗</a>
+    <a class="btn ghost" href="https://drive.google.com/file/d/1odavH7y3HSr8hYnWkaO4bduoWaZR0Fye/view?usp=drive_link" target="_blank" rel="noopener">Open Buried Hide Regs (PDF) ↗</a>
+  </div>
+  <p class="muted small" id="srcNote"></p>
+</main>
+<div id="lb"><img alt=""></div>
+<div id="lbbar"><button id="lbz" type="button" aria-label="Zoom">⤢</button><button id="lbx" type="button" aria-label="Close">×</button></div>
+
+<script src="reference-data.js"></script>
+<script src="reference-sync.js"></script>
+<script>
+(function () {
+  const R = window.REFERENCE;
+  const NAMES = { c: 'Beyond the Sniff', r: 'Nosework Regs (' + R.regs.versions.r + ')', b: 'Buried Hide Regs (' + R.regs.versions.b + ')' };
+  let bts = R.bts, DATA = [];
+  const TAGS = { c: 'BtS', r: 'Nosework', b: 'Buried' };
+  const LEVELS = ['novice', 'intermediate', 'advanced', 'excellent', 'premium'];
+  const $ = (s) => document.querySelector(s);
+  const tmp = document.createElement('template');
+  function setData() {
+    DATA = bts.sections.map((s) => ({ d: 'c', g: s.g, t: s.t, h: s.h })).concat(R.regs.sections);
+    DATA.forEach((s, i) => { s.i = i; tmp.innerHTML = s.h; s.x = (tmp.content.textContent || '').replace(/\s+/g, ' '); s.hay = (s.g + ' ' + s.t + ' ' + s.x).toLowerCase(); });
+  }
+  setData();
+  const fmtDate = (ms) => new Date(ms).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' });
+  function note(state) {
+    const when = 'Beyond the Sniff as at ' + fmtDate(bts.modified) + (bts.builtIn ? ' (copy built into the app)' : '');
+    const msg = { checking: when + ' · checking for updates…', pictures: when + ' · downloading pictures…',
+      offline: when + ' · no signal, using the copy on this phone', error: when + ' · couldn\'t check for updates just now' }[state] || when;
+    $('#updText').textContent = msg;
+    $('#upd').classList.toggle('busy', state === 'checking' || state === 'pictures');
+  }
+  $('#srcNote').textContent = 'Beyond the Sniff updates itself from the Google Doc whenever you open Search with signal. The Nosework and Buried Hide Regs are built into the app. The originals (above, need signal) are the authority if anything differs.';
+  // Wide tables with a heading row show each row as a card on phones.
+  function stackTables() {
+    document.querySelectorAll('#out .tbl table:not(.done)').forEach((tb) => {
+      tb.classList.add('done');
+      const rows = tb.rows; if (rows.length < 2) return;
+      const head = [...rows[0].cells];
+      if (head.length < 4 || head.some((c) => c.querySelector('img') || c.textContent.trim().length > 40)) return;
+      tb.classList.add('stack');
+      for (let r = 1; r < rows.length; r++) [...rows[r].cells].forEach((c, i) => c.setAttribute('data-h', head[i] ? head[i].textContent.trim() : ''));
+    });
+  }
+  function fillImages() {
+    stackTables();
+    document.querySelectorAll('#out img[data-key]:not([src])').forEach(async (img) => {
+      const u = await RefSync.imageUrl(img.dataset.key);
+      if (u) { img.classList.remove('missing'); img.src = u; img.setAttribute('data-zoom', ''); }
+      else if (!img.classList.contains('missing')) { img.classList.add('missing'); img.alt = 'Picture not on this phone yet – it downloads when you open Search with signal.'; }
+    });
+  }
+
+  let docF = 'all', lvlF = null;
+  try { const s = JSON.parse(localStorage.getItem('jl.ref') || '{}'); if (s.d) docF = s.d; } catch (e) {}
+
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escHtml = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  function terms(q) { const t = []; q.replace(/"([^"]+)"|(\S+)/g, (m, a, b) => { const v = (a || b).trim().toLowerCase(); if (v) t.push(v); }); return t; }
+  function hl(html, ts) {
+    if (!ts.length) return html;
+    const re = new RegExp('(' + ts.map(esc).sort((a, b) => b.length - a.length).join('|') + ')', 'gi');
+    return html.split(/(<[^>]+>)/).map((p) => p.startsWith('<') ? p : p.replace(re, '<mark>$1</mark>')).join('');
+  }
+  function snippet(text, ts) {
+    let i = text.toLowerCase().indexOf(ts[0]); if (i < 0) i = 0;
+    const a = Math.max(0, i - 60), b = Math.min(text.length, i + 140);
+    return hl(escHtml((a > 0 ? '…' : '') + text.slice(a, b) + (b < text.length ? '…' : '')), ts);
+  }
+  function levelOK(s) {
+    if (!lvlF) return true;
+    const own = LEVELS.filter((l) => (s.g + ' ' + s.t).toLowerCase().includes(l));
+    return own.length ? own.includes(lvlF) : s.hay.includes(lvlF);
+  }
+  function card(s, ts) {
+    let n = 0; ts.forEach((t) => { let i = -1; const h = (s.t + ' ' + s.x).toLowerCase(); while ((i = h.indexOf(t, i + 1)) >= 0) n++; });
+    return '<details class="sec"><summary><span class="tag ' + s.d + '">' + TAGS[s.d] + '</span><span class="st">' + hl(escHtml(s.t), ts) + '</span>' +
+      (ts.length ? '<span class="hits">' + n + ' hit' + (n === 1 ? '' : 's') + '</span>' : '') + '</summary>' +
+      (ts.length ? '<div class="snip">' + snippet(s.x, ts) + '</div>' : '') + '<div class="body">' + hl(s.h, ts) + '</div></details>';
+  }
+  function render() {
+    const q = $('#q').value.trim(), ts = terms(q);
+    $('#clear').hidden = !q;
+    let list = DATA.filter((s) => (docF === 'all' || s.d === docF) && levelOK(s));
+    if (ts.length) {
+      list = list.filter((s) => ts.every((t) => s.hay.includes(t)));
+      list.sort((a, b) => { const sc = (s) => ts.filter((t) => s.t.toLowerCase().includes(t)).length; return sc(b) - sc(a) || a.i - b.i; });
+      $('#count').textContent = list.length ? list.length + ' section' + (list.length === 1 ? '' : 's') + ' match – tap to read' : '';
+      $('#out').innerHTML = list.length ? list.map((s) => card(s, ts)).join('') : '<div class="status warn">No matches for “' + escHtml(q) + '”. Try fewer or shorter words.</div>';
+    } else {
+      $('#count').textContent = lvlF ? 'Sections for ' + lvlF[0].toUpperCase() + lvlF.slice(1) : 'Browse by topic, or type to search all three.';
+      let html = '', lastD = null, lastG = null;
+      list.forEach((s) => {
+        if (s.d !== lastD) { html += '<div class="doc-h"><span class="tag ' + s.d + '">' + TAGS[s.d] + '</span>' + NAMES[s.d] + '</div>'; lastD = s.d; lastG = null; }
+        if (s.g !== lastG) { html += '<div class="grp">' + escHtml(s.g) + '</div>'; lastG = s.g; }
+        html += card(s, []);
+      });
+      $('#out').innerHTML = html || '<p class="muted">Nothing here.</p>';
+    }
+    fillImages();
+  }
+  let tmr; $('#q').addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(render, 120); });
+  $('#clear').onclick = () => { $('#q').value = ''; render(); $('#q').focus(); };
+  document.querySelectorAll('#docF .chipbtn').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.d === docF));
+    b.onclick = () => {
+      docF = b.dataset.d; document.querySelectorAll('#docF .chipbtn').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      try { localStorage.setItem('jl.ref', JSON.stringify({ d: docF })); } catch (e) {}
+      render();
+    };
+  });
+  document.querySelectorAll('#lvlF .chipbtn').forEach((b) => b.onclick = () => {
+    lvlF = lvlF === b.dataset.l ? null : b.dataset.l;
+    document.querySelectorAll('#lvlF .chipbtn').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.l === lvlF)));
+    render();
+  });
+  document.addEventListener('click', (e) => {
+    const im = e.target.closest('img[data-zoom]'); if (!im) return;
+    e.preventDefault(); const lb = $('#lb'); lb.querySelector('img').src = im.src; lb.classList.remove('big');
+    lb.style.display = 'block'; $('#lbbar').style.display = 'flex'; lb.scrollTop = 0;
+  });
+  $('#lbx').onclick = () => { $('#lb').style.display = 'none'; $('#lbbar').style.display = 'none'; };
+  $('#lbz').onclick = () => $('#lb').classList.toggle('big');
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#lbx').click(); });
+  const fitTop = () => { $('.searchbar').style.top = document.querySelector('header.top').offsetHeight + 'px'; };
+  fitTop(); window.addEventListener('resize', fitTop);
+  render();
+  note('');
+  RefSync.load().then((live) => {
+    if (live && (!bts || live.modified >= bts.modified || bts.builtIn)) { bts = live; setData(); render(); }
+    note('');
+    RefSync.sync({
+      onChange: (d) => { bts = d; const open = [...document.querySelectorAll('details.sec[open] .st')].map((e) => e.textContent); setData(); render();
+        document.querySelectorAll('details.sec').forEach((d2) => { if (open.includes(d2.querySelector('.st').textContent)) d2.open = true; }); },
+      onImage: (k) => document.querySelectorAll('#out img.missing[data-key="' + CSS.escape(k) + '"]').forEach((i) => { i.removeAttribute('src'); i.classList.remove('missing'); i.alt = ''; fillImages(); }),
+      onStatus: (s) => note(s === 'done' ? '' : s),
+    });
+  });
+})();
+</script>
+</body>
+</html>
