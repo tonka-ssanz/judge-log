@@ -3,33 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Report a concern · SSANZ Judge Log</title>
+<title>Notify SSANZ · SSANZ Judge Log</title>
 <meta name="theme-color" content="#2f6b4f">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <link rel="stylesheet" href="styles.css">
+<style>
+  .tile.full { grid-column: 1 / -1; min-height: 88px; }
+  button.tile { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line); cursor: pointer; }
+  .need::after { content: " *"; color: var(--muted); }
+</style>
 </head>
 <body>
 <header class="top">
   <div class="row">
-    <a class="back" href="./#home">‹ Home</a>
-    <h1>Report a concern</h1>
+    <a class="back" href="./#home" id="backLink">‹ Home</a>
+    <h1>Notify SSANZ</h1>
   </div>
 </header>
 <main class="wrap">
-<form id="reportForm" autocomplete="off">
-  <p class="muted small">This goes to the JDSC only. It is <b>not</b> added to your Judging Record. Your mail app opens with the report filled in; add any photos, then press Send.</p>
 
-  <label class="f" for="rJudge">Your name</label>
-  <input type="text" id="rJudge" name="judge" required autocomplete="name">
+<!-- Step 1: which kind of report -->
+<section id="choose">
+  <p class="muted small">Let the Judges Development Sub-Committee know about something at a trial. This goes to the JDSC only and is <b>not</b> added to your Judging Record.</p>
+  <div class="tiles">
+    <button type="button" class="tile primary full" data-mode="foul"><b>Dog fouled during search</b><span>Quick report – a few taps</span></button>
+    <button type="button" class="tile full" data-mode="other"><b>Something else</b><span>Aggressive or compromised dog, equipment, handler conduct, safety and more</span></button>
+  </div>
+  <div class="status warn" id="draftNote" hidden><span class="grow">You have an unsent report on this phone.</span><button class="btn small" type="button" id="resume">Carry on</button></div>
+</section>
 
-  <label class="f" for="rDate">Trial date</label>
-  <input type="date" id="rDate" name="date" required>
+<!-- Step 2: the report -->
+<form id="reportForm" autocomplete="off" hidden>
+  <div class="status ok" id="trialSummary" hidden>
+    <span class="grow" id="trialText"></span>
+    <button class="btn small ghost" type="button" id="trialChange">Change</button>
+  </div>
+  <div id="trialFields">
+    <label class="f" for="rJudge">Your name</label>
+    <input type="text" id="rJudge" name="judge" autocomplete="name">
 
-  <label class="f" for="rHost">Host organisation and location</label>
-  <input type="text" id="rHost" name="host" required placeholder="e.g. Noseworx, Hamilton">
+    <label class="f" for="rDate">Trial date</label>
+    <input type="date" id="rDate" name="date">
+
+    <label class="f" for="rHost">Host organisation and location</label>
+    <input type="text" id="rHost" name="host" list="hostList" placeholder="e.g. Noseworx, Hamilton">
+    <datalist id="hostList"></datalist>
+  </div>
 
   <label class="f">Level</label>
   <div class="chips" data-chips="level" data-options="Novice|Intermediate|Advanced|Excellent|Premium|Not applicable"></div>
@@ -38,23 +60,30 @@
   <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Not applicable|Other"></div>
   <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
 
-  <label class="f">Type of concern</label>
-  <div class="chips" data-chips="type" data-options="Aggressive dog|Compromised dog|Dog fouled during search|Incorrect equipment supplied|Handler conduct|Venue or safety issue|Injury|Rule question|Other"></div>
+  <div class="other-only">
+    <label class="f">Type of concern</label>
+    <div class="chips" data-chips="type" data-options="Aggressive dog|Compromised dog|Incorrect equipment supplied|Handler conduct|Venue or safety issue|Injury|Rule question|Other"></div>
+  </div>
 
   <div class="two">
-    <div><label class="f" for="rDog">Dog's name</label><input type="text" id="rDog" name="dog"></div>
-    <div><label class="f" for="rHandler">Handler's name</label><input type="text" id="rHandler" name="handler"></div>
+    <div><label class="f" for="rDog" id="dogLabel">Dog's name</label><input type="text" id="rDog" name="dog" list="dogList"></div>
+    <div><label class="f" for="rHandler">Handler's name</label><input type="text" id="rHandler" name="handler" list="handlerList"></div>
   </div>
+  <datalist id="dogList"></datalist><datalist id="handlerList"></datalist>
   <p class="small muted">Please spell names the same way each time so the committee can spot repeat reports.</p>
 
-  <label class="f" for="rWit">Witnesses</label>
-  <input type="text" id="rWit" name="witnesses" placeholder="Steward, other judges, trial host…">
+  <div class="other-only">
+    <label class="f" for="rWit">Witnesses</label>
+    <input type="text" id="rWit" name="witnesses" placeholder="Steward, other judges, trial host…">
+  </div>
 
-  <label class="f" for="rWhat">What happened</label>
-  <textarea id="rWhat" name="what" required data-voice></textarea>
+  <label class="f" for="rWhat" id="whatLabel">What happened</label>
+  <textarea id="rWhat" name="what" data-voice></textarea>
 
-  <label class="f" for="rAction">Action taken on the day</label>
-  <textarea id="rAction" name="action" data-voice style="min-height:80px"></textarea>
+  <div class="other-only">
+    <label class="f" for="rAction">Action taken on the day</label>
+    <textarea id="rAction" name="action" data-voice style="min-height:80px"></textarea>
+  </div>
 
   <label class="f">Was the trial host involved?</label>
   <div class="chips" data-chips="hostInvolved" data-options="Yes|No"></div>
@@ -64,10 +93,10 @@
   <div class="chips" data-chips="resolved" data-options="Yes – for information only|No – needs follow-up"></div>
 
   <div class="actions">
-    <button class="btn block" type="submit">Create email to JDSC</button>
+    <button class="btn block" type="submit">Notify SSANZ</button>
     <button class="btn ghost block" type="button" id="clearReport">Clear form</button>
   </div>
-  <p class="small muted">No signal? The email waits in your outbox and sends when you're back online. Your answers stay on this phone until you clear the form.</p>
+  <p class="small muted">Your mail app opens with the report filled in; add any photos, then press Send. No signal? The email waits in your outbox. Your answers stay on this phone until you clear the form.</p>
 </form>
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -76,13 +105,21 @@
 // The concern-log script in the JDSC Gmail reads the lines between the header and footer.
 // If any label below changes, change REPORT_LABELS in that script too.
 const JDSC = 'ssanzjdsubcommittee@gmail.com';
+const FOUL = 'Dog fouled during search';
 const KEY = 'jl.draft.report';
+const LAST = 'jl.report.lastTrial';   // trial details from the judge's last report, reused the same day
+const NAMES = 'jl.report.names';      // hosts, dogs and handlers typed before, for suggestions
 const $ = (s) => document.querySelector(s);
 const f = $('#reportForm');
+let mode = '';
+
 function toast(m) { const t = $('#toast'); t.textContent = m; t.hidden = false; setTimeout(() => { t.hidden = true; }, 3500); }
 function get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+function put(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage off */ } }
 function today() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
 function nzDate(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : iso; }
+function niceDate(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? new Date(+m[1], m[2] - 1, +m[3]).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' }) : iso; }
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 document.querySelectorAll('[data-chips]').forEach((box, n) => {
   const name = box.dataset.chips;
@@ -90,38 +127,105 @@ document.querySelectorAll('[data-chips]').forEach((box, n) => {
     `<input type="radio" name="${name}" id="r${n}-${i}" value="${o}"><label for="r${n}-${i}">${o}</label>`).join('');
 });
 const chip = (name) => { const c = f.querySelector(`input[name="${name}"]:checked`); return c ? c.value : ''; };
+const setChip = (name, value) => f.querySelectorAll(`input[name="${name}"]`).forEach((i) => { i.checked = i.value === value; });
 function syncOthers() {
   f.elementOther.hidden = chip('element') !== 'Other';
   f.hostDetail.hidden = chip('hostInvolved') !== 'Yes';
 }
 
-function save() {
-  const d = {};
-  Array.from(f.elements).forEach((el) => { if (!el.name) return; if (el.type === 'radio') { if (el.checked) d[el.name] = el.value; } else d[el.name] = el.value; });
-  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { /* ignore */ }
+/* ---------- screens and the two branches ---------- */
+function show(screen) {
+  $('#choose').hidden = screen !== 'choose';
+  f.hidden = screen !== 'form';
+  $('#backLink').textContent = screen === 'form' ? '‹ Back' : '‹ Home';
+  $('#backLink').href = screen === 'form' ? '#' : './#home';
+  window.scrollTo(0, 0);
 }
-function restore() {
-  const d = get(KEY, null); const s = get('jl.settings', {});
-  if (d) Array.from(f.elements).forEach((el) => {
+function setMode(m) {
+  mode = m;
+  const foul = m === 'foul';
+  document.querySelectorAll('.other-only').forEach((el) => { el.hidden = foul; });
+  $('#dogLabel').classList.toggle('need', foul);
+  $('#whatLabel').textContent = foul ? 'Anything to add? (optional)' : 'What happened';
+}
+
+/* ---------- auto-fill ---------- */
+// Trial details: from the judge's last report today, otherwise from a search they've logged today.
+function todaysTrial() {
+  const last = get(LAST, null);
+  if (last && last.on === today()) return last;
+  const logged = get('jl.entries', []).filter((e) => e.date === today()).pop();
+  if (logged) return { host: [logged.host, logged.location].filter(Boolean).join(', '), level: logged.level, element: logged.element, elementOther: logged.elementOther };
+  return null;
+}
+function fillSuggestions() {
+  const n = get(NAMES, { hosts: [], dogs: [], handlers: [] });
+  const hosts = new Set(n.hosts);
+  get('jl.entries', []).forEach((e) => { if (e.host) hosts.add([e.host, e.location].filter(Boolean).join(', ')); });
+  const opts = (list) => [...list].map((v) => `<option value="${esc(v)}">`).join('');
+  $('#hostList').innerHTML = opts(hosts);
+  $('#dogList').innerHTML = opts(n.dogs);
+  $('#handlerList').innerHTML = opts(n.handlers);
+}
+function rememberNames() {
+  const n = get(NAMES, { hosts: [], dogs: [], handlers: [] });
+  const add = (list, v) => { v = (v || '').trim(); if (!v) return list; return [v].concat(list.filter((x) => x.toLowerCase() !== v.toLowerCase())).slice(0, 60); };
+  n.hosts = add(n.hosts, f.host.value); n.dogs = add(n.dogs, f.dog.value); n.handlers = add(n.handlers, f.handler.value);
+  put(NAMES, n);
+  put(LAST, { on: today(), host: f.host.value.trim(), level: chip('level'), element: chip('element'), elementOther: f.elementOther.value.trim() });
+}
+function trialSummary(open) {
+  const ready = f.judge.value.trim() && f.date.value && f.host.value.trim();
+  const collapse = ready && !open;
+  $('#trialSummary').hidden = !collapse;
+  $('#trialFields').hidden = !!collapse;
+  if (collapse) $('#trialText').textContent = `${niceDate(f.date.value)} · ${f.host.value.trim()} · ${f.judge.value.trim()}`;
+}
+function startNew(m) {
+  f.reset(); setMode(m); fillSuggestions();
+  f.judge.value = get('jl.settings', {}).name || '';
+  f.date.value = today();
+  const t = todaysTrial();
+  if (t) { f.host.value = t.host || ''; setChip('level', t.level); setChip('element', t.element); f.elementOther.value = t.elementOther || ''; }
+  if (m === 'foul') { setChip('hostInvolved', 'No'); setChip('resolved', 'Yes – for information only'); }
+  syncOthers(); trialSummary(); save(); show('form');
+}
+
+/* ---------- draft kept on the phone ---------- */
+function save() {
+  const d = { mode };
+  Array.from(f.elements).forEach((el) => { if (!el.name) return; if (el.type === 'radio') { if (el.checked) d[el.name] = el.value; } else d[el.name] = el.value; });
+  put(KEY, d);
+}
+function restore(d) {
+  f.reset(); setMode(d.mode || 'other');
+  Array.from(f.elements).forEach((el) => {
     if (!el.name || !(el.name in d)) return;
     if (el.type === 'radio') el.checked = d[el.name] === el.value; else el.value = d[el.name];
   });
-  if (!f.judge.value && s.name) f.judge.value = s.name;
-  if (!f.date.value) f.date.value = today();
-  syncOthers();
+  syncOthers(); trialSummary(); show('form');
 }
 f.addEventListener('input', save);
 f.addEventListener('change', () => { syncOthers(); save(); });
 
+/* ---------- send ---------- */
 window.openMail = (url) => { location.href = url; };
 const v = (x) => (x && String(x).trim()) || '-';
+function need(ok, msg, open) { if (!ok) { if (open) trialSummary(true); toast(msg); } return ok; }
 f.addEventListener('submit', (ev) => {
   ev.preventDefault();
-  const type = chip('type'), resolved = chip('resolved');
-  if (!type) { toast('Tap a type of concern.'); return; }
-  if (!resolved) { toast('Was it resolved on the day? Tap Yes or No.'); return; }
+  const foul = mode === 'foul';
+  const type = foul ? FOUL : chip('type');
+  const resolved = chip('resolved');
+  if (!need(f.judge.value.trim() && f.date.value && f.host.value.trim(), 'Please fill in your name, the trial date and host.', true)) return;
+  if (!need(chip('level') && chip('element'), 'Tap the Level and Element.')) return;
+  if (!need(type, 'Tap a type of concern.')) return;
+  if (!need(!foul || f.dog.value.trim(), "Please add the dog's name.")) return;
+  if (!need(foul || f.what.value.trim(), 'Please say what happened.')) return;
+  if (!need(resolved, 'Was it resolved on the day? Tap Yes or No.')) return;
   const element = chip('element') === 'Other' ? (f.elementOther.value.trim() || 'Other') : chip('element');
   const hostInv = chip('hostInvolved') === 'Yes' ? 'Yes' + (f.hostDetail.value.trim() ? ' – ' + f.hostDetail.value.trim() : '') : (chip('hostInvolved') || '-');
+  const what = f.what.value.trim() || (foul ? 'Dog fouled during the search.' : '');
   const body = [
     'SSANZ JUDGE CONCERN REPORT',
     'Judge: ' + v(f.judge.value),
@@ -132,26 +236,36 @@ f.addEventListener('submit', (ev) => {
     'Type of concern: ' + type,
     'Dog: ' + v(f.dog.value),
     'Handler: ' + v(f.handler.value),
-    'Witnesses: ' + v(f.witnesses.value),
-    'What happened: ' + v(f.what.value),
-    'Action taken on the day: ' + v(f.action.value),
+    'Witnesses: ' + v(foul ? '' : f.witnesses.value),
+    'What happened: ' + v(what),
+    'Action taken on the day: ' + v(foul ? '' : f.action.value),
     'Trial host involved: ' + hostInv,
     'Resolved on the day: ' + resolved,
     '--- end of report ---',
     '',
     '(Photos attached: add them to this email before sending.)',
   ].join('\n');
-  const subject = `[Judge Concern] ${type} – ${f.host.value.trim()} – ${nzDate(f.date.value)}`;
+  const dog = f.dog.value.trim() ? ` – ${f.dog.value.trim()}` : '';
+  const subject = `[Judge Concern] ${type}${dog} – ${f.host.value.trim()} – ${nzDate(f.date.value)}`;
+  rememberNames();
   window.openMail('mailto:' + JDSC + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body));
   setTimeout(() => {
     if (confirm('Did your mail app open with the report ready to send?\n\nOK clears this form. Cancel keeps it so you can try again.')) {
-      localStorage.removeItem(KEY); location.href = './#home';
+      put(KEY, null); location.href = './#home';
     }
   }, 1500);
 });
 $('#clearReport').addEventListener('click', () => {
   if (!confirm('Clear this report?')) return;
-  f.reset(); localStorage.removeItem(KEY); restore();
+  put(KEY, null); $('#draftNote').hidden = true; show('choose');
+});
+
+document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => startNew(b.dataset.mode)));
+$('#resume').addEventListener('click', () => restore(get(KEY, {})));
+$('#trialChange').addEventListener('click', () => trialSummary(true));
+$('#backLink').addEventListener('click', (ev) => {
+  if (f.hidden) return;                     // on the first screen it goes Home as normal
+  ev.preventDefault(); save(); $('#draftNote').hidden = false; show('choose');
 });
 
 // Voice button, same as the main app.
@@ -178,7 +292,9 @@ document.querySelectorAll('textarea[data-voice]').forEach((ta) => {
   });
 });
 
-restore();
+fillSuggestions();
+$('#draftNote').hidden = !get(KEY, null);
+show('choose');
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
