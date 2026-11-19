@@ -220,7 +220,7 @@ function renderHome() {
   renderHomeTodo();
   if (jdsc) {
     $('#trainingTile').hidden = true;
-    $('#homeWho').innerHTML = `<div class="card who"><b class="who-name">JDSC account</b><div class="who-status muted small">Signed in with ${esc(CONFIG.jdsc)}</div></div>`;
+    $('#homeWho').innerHTML = '';
     $('#homeStatus').innerHTML = n
       ? `<div class="status warn"><span class="grow">Your own judging entries are safe on this phone. Sign out of the JDSC account to get back to them.</span></div>` : '';
     return;

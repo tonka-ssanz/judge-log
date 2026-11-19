@@ -260,13 +260,14 @@ async function renderTraining() {
 }
 /* Approved appointments from the JDSC's yearly Trials tabs. */
 const APPT_CLASS = { Upcoming: '', 'Signed off': 'ok', 'Waiting for supervisor': 'warn', 'Record to send': 'bad', Completed: '' };
-function appointmentsHtml(me) {
+function appointmentsHtml(me, admin) {
   const list = (me && me.appointments) || [];
   if (!me) return '';
-  if (!list.length) return `<h2>My approved appointments</h2><div class="card"><p class="small muted">No approved training appointments at your current level in the JDSC's trial lists yet.</p></div>`;
+  const heading = admin ? 'Approved appointments' : 'My approved appointments';
+  if (!list.length) return `<h2>${heading}</h2><div class="card"><p class="small muted">No approved training appointments at ${admin ? 'their' : 'your'} current level in the JDSC's trial lists yet.</p></div>`;
   const row = (a) => {
     const i = list.indexOf(a);
-    const action = a.status === 'Record to send' ? `<a class="btn small" href="#log/appt-${i}">Log it</a>`
+    const action = a.status === 'Record to send' && !admin ? `<a class="btn small" href="#log/appt-${i}">Log it</a>`
       : a.recordId ? `<a class="small" href="#review/${encodeURIComponent(a.recordId)}">Open record</a>` : '';
     return `<div class="entry"><div class="top"><span>${esc(a.kind)}: ${esc(a.level)} ${esc(a.element || a.elementText)}</span><span>${esc(nzDate(a.date))}</span></div>
       <div class="meta">${esc(a.host)}${a.venue && a.venue !== 'TBC' ? ' · ' + esc(a.venue) : ''}${a.supervisor ? ' · ' + esc(a.supervisor) : ''}</div>
@@ -274,7 +275,7 @@ function appointmentsHtml(me) {
   };
   const upcoming = list.filter((a) => a.status === 'Upcoming').reverse();
   const past = list.filter((a) => a.status !== 'Upcoming');
-  let html = `<h2>My approved appointments</h2>`;
+  let html = `<h2>${heading}</h2>`;
   html += upcoming.length ? `<h3 class="sub">Coming up</h3><div class="card">${upcoming.map(row).join('')}</div>` : '';
   html += past.length ? `<h3 class="sub">Done</h3><div class="card">${past.map(row).join('')}</div>
     <p class="small muted">“Completed” means it was done before the Judge Log was used for training, so the JDSC records it from the paper form.</p>` : '';
@@ -606,7 +607,7 @@ function adminPersonHtml(out) {
   html += signoffsHtml(out.progress);
   if (out.masterUrl) html += `<div class="actions"><a class="btn block" target="_blank" rel="noopener" href="${esc(out.masterUrl)}">Open their row in the master sheet</a></div>
     <p class="small muted">Make all changes in Judges and Trials (master): "-" = not required, "Waived" = waived, a date in "Date SWI's Approved" opens the next stage, a date in "Date Promoted" when they pass. Then change their Level.</p>`;
-  html += appointmentsHtml(out.person && out.appointments ? { appointments: out.appointments } : null);
+  html += appointmentsHtml(out.person && out.appointments ? { appointments: out.appointments } : null, true);
   html += reportsHtml(out.records, out.person.email);
   if (out.records.length) html += `<h2>Training records</h2><div class="card">${out.records.map((r) => recordRow(r, `#review/${encodeURIComponent(r.id)}`)).join('')}</div>`;
   html += `<div class="actions"><a class="btn ghost block" href="#admin">Back to all judges</a></div>`;
