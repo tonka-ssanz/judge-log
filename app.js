@@ -134,6 +134,11 @@ function route() {
   const name = TITLES[view] ? view : 'home';
   $$('[data-view]').forEach((s) => { s.hidden = s.dataset.view !== name; });
   $('#backBtn').hidden = name === 'home';
+  // On a judge's admin page, the top button goes back to the full judges list.
+  const toList = name === 'admin' && !!arg;
+  $('#backBtn').dataset.to = toList ? 'admin' : 'home';
+  $('#backBtn').textContent = toList ? '‹ All judges' : '‹ Home';
+  $('#backBtn').setAttribute('aria-label', toList ? 'Back to all judges' : 'Back to home');
   $('#pageTitle').innerHTML = name === 'home'
     ? 'SSANZ Judge Log<small>Judges Development Sub-Committee</small>' : esc(TITLES[name]);
   window.scrollTo(0, 0);
@@ -700,7 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildChips(); addVoice();
   fillSupervisors();
   window.addEventListener('hashchange', route);
-  $('#backBtn').addEventListener('click', () => { location.hash = 'home'; });
+  $('#backBtn').addEventListener('click', () => { location.hash = $('#backBtn').dataset.to || 'home'; });
 
   $('#saveDetails').addEventListener('click', () => {
     saveSettings({ name: $('#setName').value.trim(), email: $('#setEmail').value.trim(), membership: $('#setMember').value.trim() });
