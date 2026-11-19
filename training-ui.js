@@ -321,8 +321,18 @@ function renderHomeTodo() {
 /* ---------- To do (supervising judge) ---------- */
 function signInPrompt(box, why, after, hint) {
   box.innerHTML = `<div class="card"><p>${esc(why)}</p><button class="btn block" data-signin>Sign in with Google</button></div>`;
-  $('[data-signin]', box).addEventListener('click', () => {
-    getToken(hint ? { hint } : {}).then(() => refreshMe()).then(after).catch((e) => (e.message === 'offline' || e.message === 'loading' || /popup/.test(e.message) ? explainTokenError(e) : toast(e.message, 6000)));
+  const btn = $('[data-signin]', box);
+  btn.addEventListener('click', () => {
+    if (btn.dataset.busy) return;            // ignore a second tap while signing in
+    btn.dataset.busy = '1'; btn.disabled = true; btn.textContent = 'Signing in…';
+    const reset = () => { delete btn.dataset.busy; btn.disabled = false; btn.textContent = 'Sign in with Google'; };
+    getToken(hint ? { hint } : {}).then(() => {
+      btn.textContent = 'Checking your account…';
+      const me = cachedMe();
+      // JDSC admin: we already know it's the JDSC account, so carry on straight away and refresh in the background.
+      if (hint && me && me.isAdmin) { refreshMe().catch(() => {}); return after(); }
+      return refreshMe().then(after);
+    }).catch((e) => { reset(); (e.message === 'offline' || e.message === 'loading' || /popup/.test(e.message) ? explainTokenError(e) : toast(e.message, 6000)); });
   });
 }
 function renderTodo() {
@@ -512,11 +522,16 @@ async function renderAdmin(email) {
     box.innerHTML = `<div class="card"><p>The JDSC admin screen needs the JDSC Gmail (${esc(CONFIG.jdsc)}).</p>` +
       (me ? `<p class="small muted">You're signed in as ${esc(me.email)}.</p>` : '') +
       `<button class="btn block" data-admin-signin>Sign in with the JDSC account</button></div>`;
-    $('[data-admin-signin]', box).addEventListener('click', () => {
-      getToken({ chooseAccount: true, hint: CONFIG.jdsc }).then(() => refreshMe()).then((m) => {
+    $('[data-admin-signin]', box).addEventListener('click', (ev) => {
+      const b = ev.currentTarget; if (b.dataset.busy) return;
+      b.dataset.busy = '1'; b.disabled = true; b.textContent = 'Signing in…';
+      getToken({ chooseAccount: true, hint: CONFIG.jdsc }).then(() => { b.textContent = 'Checking your account…'; return refreshMe(); }).then((m) => {
         if (!m.isAdmin) toast(`${m.email} isn't a JDSC admin account.`, 6000);
         renderAdmin(email);
-      }).catch((e) => (/^(offline|loading)$/.test(e.message) || /popup/.test(e.message) ? explainTokenError(e) : toast(e.message, 6000)));
+      }).catch((e) => {
+        delete b.dataset.busy; b.disabled = false; b.textContent = 'Sign in with the JDSC account';
+        (/^(offline|loading)$/.test(e.message) || /popup/.test(e.message) ? explainTokenError(e) : toast(e.message, 6000));
+      });
     });
     return;
   }
