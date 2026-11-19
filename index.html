@@ -108,12 +108,12 @@
     <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Other"></div>
     <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
 
-    <label class="f" for="fSetter">Who set the hide(s)?</label>
-    <div class="chips" data-chips="setterQuick" data-options="Me|Co-judge|Trainee" data-fill="fSetter"></div>
-    <input type="text" id="fSetter" name="setter" style="margin-top:8px" placeholder="Name, or tap above">
+    <label class="f">Who set the hide(s)?</label>
+    <div class="chips" data-chips="setterQuick" data-options="Me|Someone else" data-default="Me"></div>
+    <input type="text" id="fSetter" name="setter" value="Me" style="margin-top:8px" placeholder="Their name" autocomplete="off" hidden>
 
     <div class="two">
-      <div><label class="f" for="fTeams" id="teamsLabel">Teams</label><input type="number" inputmode="numeric" min="0" id="fTeams" name="teams" required></div>
+      <div><label class="f" for="fTeams" id="teamsLabel">Teams<span class="hint">Number of teams judged</span></label><input type="number" inputmode="numeric" min="0" id="fTeams" name="teams" required></div>
       <div><label class="f" for="fPasses" id="passesLabel">Passes<span class="hint">Correct calls on all hides in time</span></label><input type="number" inputmode="numeric" min="0" id="fPasses" name="passes"></div>
     </div>
     <p class="small muted" id="rateNote"></p>

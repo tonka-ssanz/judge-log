@@ -554,6 +554,10 @@ function openLogForm(id) {
   f.supervisor.value = v.supervisor || '';
   f.date.value = v.date || today();
   ['host', 'location', 'setter', 'teams', 'passes', 'video', 'reflections'].forEach((k) => { f[k].value = v[k] == null ? '' : v[k]; });
+  // Who set the hide(s): Me (default) or Someone else. Older entries may hold a name; keep it unless the judge taps a tile.
+  if (!f.setter.value) f.setter.value = 'Me';
+  setChip(f, 'setterQuick', f.setter.value === 'Me' ? 'Me' : 'Someone else');
+  f.setter.hidden = f.setter.value === 'Me';
   setChip(f, 'level', v.level || ''); setElement(f, v.element || '');
   $('#deleteEntry').hidden = !e || e.sent;
   showKind(v.extras || {}); updateRate();
@@ -563,7 +567,7 @@ function showKind(values) {
   const training = !!form;
   $('#judgingOnly').hidden = training; $('#trainingOnly').hidden = !training;
   $('#locLabel').textContent = training ? 'Venue' : 'Trial location';
-  $('#teamsLabel').textContent = training ? 'Teams entered (E)' : 'Teams';
+  $('#teamsLabel').innerHTML = training ? 'Teams entered (E)' : 'Teams<span class="hint">Number of teams judged</span>';
   $('#passesLabel').innerHTML = training ? 'Sourced in time (S)<span class="hint">Teams that sourced the hide within the time allowed</span>' : 'Passes<span class="hint">Correct calls on all hides in time</span>';
   $('#reflLabel').textContent = training ? 'Trainee learning / reflections' : 'Reflections';
   $('#fSup').previousElementSibling.textContent = form ? form.supervisorTitle : 'Supervising judge';
@@ -712,6 +716,17 @@ function cleanVideoLink(s) {
     return u.toString();
   } catch (_) { return s; }
 }
+/* Who set the hide(s): Me (default) or Someone else, who must be named. */
+function wireSetter(f) {
+  f.addEventListener('change', (ev) => {
+    if (ev.target.name !== 'setterQuick') return;
+    const other = ev.target.value === 'Someone else';
+    f.setter.hidden = !other;
+    if (other) { if (f.setter.value === 'Me') f.setter.value = ''; f.setter.focus(); }
+    else f.setter.value = 'Me';
+    saveDraft(f);
+  });
+}
 function wireYouTube(f) {
   const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
   $('#openYouTube').href = phone ? 'https://www.youtube.com/' : 'https://www.youtube.com/upload';
@@ -760,7 +775,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('[data-view=record]').addEventListener('change', (e) => { if (e.target.name === 'recordTab') renderRecord(); });
 
   const f = logForm();
-  wireYouTube(f);
+  wireYouTube(f); wireSetter(f);
   f.addEventListener('change', (ev) => { if (ev.target.name === 'kind') showKind(); });
   f.addEventListener('input', () => { updateRate(); saveDraft(f); });
   f.addEventListener('change', () => saveDraft(f));
@@ -769,6 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const e = readLogForm();
     if (!e.level) { toast('Tap a Level.'); return; }
     if (!e.element) { toast('Tap an Element.'); return; }
+    if (chipValue(f, 'setterQuick') === 'Someone else' && (!e.setter || e.setter === 'Me')) { toast('Add the name of who set the hide(s).'); f.setter.focus(); return; }
     if (e.passes !== '' && +e.passes > +e.teams) { toast('Passes can\'t be more than teams.'); return; }
     if (e.kind === 'Judging' && e.passes === '') { toast('Add the number of passes.'); return; }
     const form = TRAINING_FORMS[e.kind];
