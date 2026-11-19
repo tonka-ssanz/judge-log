@@ -27,13 +27,15 @@
 
 <!-- HOME -->
 <section data-view="home">
+  <div id="homeWho"></div>
+  <div id="homeTodo"></div>
   <div id="homeStatus"></div>
   <div class="tiles">
-    <a class="tile primary" href="#log"><b>Log a judging appointment</b><span>Works without signal. Sync when you're back online.</span></a>
-    <a class="tile" href="#record"><b>My record</b><span>Past appointments and pass rates</span></a>
+    <a class="tile primary" href="#log"><b>Log a search</b><span>Judging or training. Works without signal. Sync when you're back online.</span></a>
+    <a class="tile" href="#training" id="trainingTile" hidden><b>My training</b><span id="trainingTileText">Your SWI, Probationary and Mentoring progress</span></a>
+    <a class="tile" href="#record"><b>My record</b><span>Past searches and pass rates</span></a>
     <a class="tile" href="report.html"><b>Report a concern</b><span>Email the JDSC about a trial incident</span></a>
-    <a class="tile" href="#swi"><b>Stewarding with Intent</b><span>Assess a steward</span></a>
-    <a class="tile" href="#probo"><b>Probationary coaching</b><span>Coach a probationary judge</span></a>
+    <a class="tile" href="#admin" id="adminTile" hidden><b>JDSC admin</b><span id="adminTileText">Trainee requirements and records</span></a>
   </div>
   <div class="actions">
     <button class="btn ghost block" id="syncBtnHome">Sync now</button>
@@ -50,6 +52,8 @@
   <input type="text" id="setName" autocomplete="name">
   <label class="f" for="setEmail">Your email<span class="hint">The Google account your Judging Record is in</span></label>
   <input type="email" id="setEmail" autocomplete="email">
+  <label class="f" for="setMember">SSANZ membership no.<span class="hint">Optional. Goes on your training records.</span></label>
+  <input type="text" id="setMember" inputmode="numeric">
   <div class="actions"><button class="btn" id="saveDetails">Save details</button></div>
 
   <h2>My Judging Record</h2>
@@ -58,6 +62,9 @@
     <button class="btn" id="chooseRecord">Choose my Judging Record</button>
     <button class="btn ghost" id="signOut" hidden>Sign out of Google on this phone</button>
   </div>
+  <p class="small muted" id="signedInAs"></p>
+  <h2>JDSC</h2>
+  <p class="small">JDSC members: <a href="#admin">open the admin screen</a> (sign in with the JDSC Gmail).</p>
   <h2>Put the Judge Log on your home screen</h2>
   <p class="small"><b>iPhone:</b> in Safari, tap the Share button, then <i>Add to Home Screen</i>.<br>
   <b>Android:</b> in Chrome, tap the ⋮ menu, then <i>Add to Home screen</i> or <i>Install app</i>.</p>
@@ -68,8 +75,18 @@
 <section data-view="log" hidden>
   <form id="logForm" autocomplete="off">
     <input type="hidden" name="entryId">
-    <label class="f">Which record?</label>
-    <div class="chips" data-chips="tab" data-options="SSANZ|Dogs NZ|Other" data-default="SSANZ"></div>
+    <label class="f">What was this search?</label>
+    <div class="chips" data-chips="kind" data-options="Judging|Stewarding with Intent|Probationary Judging|Mentoring" data-default="Judging"></div>
+    <div id="judgingOnly">
+      <label class="f">Which record?</label>
+      <div class="chips" data-chips="tab" data-options="SSANZ|Dogs NZ|Other" data-default="SSANZ"></div>
+    </div>
+    <div id="trainingOnly" hidden>
+      <label class="f" for="fSup">Supervising judge</label>
+      <input type="text" id="fSup" name="supervisor" list="supList" placeholder="Name of the judge you worked with">
+      <datalist id="supList"></datalist>
+      <p class="small muted" id="trainingNote">When you sync, this goes to your supervising judge to add their comments. It counts towards your training once they've completed it.</p>
+    </div>
 
     <label class="f" for="fDate">Date</label>
     <input type="date" id="fDate" name="date" required>
@@ -78,7 +95,7 @@
     <input type="text" id="fHost" name="host" list="hostList" required>
     <datalist id="hostList"></datalist>
 
-    <label class="f" for="fLoc">Trial location</label>
+    <label class="f" for="fLoc" id="locLabel">Trial location</label>
     <input type="text" id="fLoc" name="location" list="locList">
     <datalist id="locList"></datalist>
 
@@ -94,15 +111,16 @@
     <input type="text" id="fSetter" name="setter" style="margin-top:8px" placeholder="Name, or tap above">
 
     <div class="two">
-      <div><label class="f" for="fTeams">Teams</label><input type="number" inputmode="numeric" min="0" id="fTeams" name="teams" required></div>
-      <div><label class="f" for="fPasses">Passes<span class="hint">Correct calls on all hides in time</span></label><input type="number" inputmode="numeric" min="0" id="fPasses" name="passes" required></div>
+      <div><label class="f" for="fTeams" id="teamsLabel">Teams</label><input type="number" inputmode="numeric" min="0" id="fTeams" name="teams" required></div>
+      <div><label class="f" for="fPasses" id="passesLabel">Passes<span class="hint">Correct calls on all hides in time</span></label><input type="number" inputmode="numeric" min="0" id="fPasses" name="passes"></div>
     </div>
     <p class="small muted" id="rateNote"></p>
 
     <label class="f" for="fVideo">Photo or video link<span class="hint">YouTube Short from your own channel. Always post as <b>Unlisted</b>.</span></label>
     <input type="url" id="fVideo" name="video" inputmode="url" placeholder="https://youtube.com/shorts/…">
 
-    <label class="f" for="fRefl">Reflections</label>
+    <div id="trainingExtras" hidden></div>
+    <label class="f" for="fRefl" id="reflLabel">Reflections</label>
     <textarea id="fRefl" name="reflections" data-voice placeholder="What went well? What would you do differently?"></textarea>
 
     <div class="actions">
@@ -114,7 +132,7 @@
 
 <!-- RECORD -->
 <section data-view="record" hidden>
-  <div class="chips" data-chips="recordTab" data-options="SSANZ|Dogs NZ|Other" data-default="SSANZ" style="margin-top:16px"></div>
+  <div class="chips" data-chips="recordTab" data-options="SSANZ|Dogs NZ|Other|Training" data-default="SSANZ" style="margin-top:16px"></div>
   <div id="recordStatus"></div>
   <div class="stats" id="recordStats"></div>
   <div class="card" id="recordList"></div>
@@ -124,75 +142,37 @@
   </div>
 </section>
 
-<!-- STEWARDING WITH INTENT -->
-<section data-view="swi" hidden>
-  <form id="swiForm" autocomplete="off">
-    <p class="muted small">Assess a trainee stewarding for you. It's emailed to the JDSC, and the trainee too if you add their email.</p>
-    <label class="f" for="sName">Trainee's name</label>
-    <input type="text" id="sName" name="trainee" required>
-    <label class="f" for="sEmail">Trainee's email<span class="hint">Optional. They'll get a copy.</span></label>
-    <input type="email" id="sEmail" name="traineeEmail">
-    <label class="f" for="sHost">Hosting club</label>
-    <input type="text" id="sHost" name="host" list="hostList" required>
-    <label class="f" for="sDate">Date</label>
-    <input type="date" id="sDate" name="date" required>
-    <label class="f">Level</label>
-    <div class="chips" data-chips="level" data-options="Novice|Intermediate|Advanced|Excellent|Premium"></div>
-    <label class="f">Element</label>
-    <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Other"></div>
-    <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
-    <label class="f" for="sPart">Number of participants</label>
-    <input type="number" inputmode="numeric" min="0" id="sPart" name="participants">
-    <h3>Did they…</h3>
-    <div class="yn" id="swiQuestions"></div>
-    <label class="f" for="sComments">Comments<span class="hint">Anything to add, especially for the last two questions</span></label>
-    <textarea id="sComments" name="comments" data-voice></textarea>
-    <div class="actions">
-      <button class="btn block" type="submit">Create email to JDSC</button>
-      <button class="btn ghost block" type="button" data-clear>Clear form</button>
-    </div>
-    <p class="small muted">Your mail app opens with everything filled in. Press Send. With no signal it waits in your outbox.</p>
-  </form>
+<!-- TO DO (supervising judge) -->
+<section data-view="todo" hidden>
+  <div id="todoBody"></div>
 </section>
 
-<!-- PROBATIONARY COACHING -->
-<section data-view="probo" hidden>
-  <form id="proboForm" autocomplete="off">
-    <p class="muted small">For the coaching judge: one form per search. It's emailed to the JDSC, and the trainee too if you add their email.</p>
-    <label class="f">Form</label>
-    <div class="chips" data-chips="stage" data-options="Novice|Intermediate" data-default="Novice"></div>
-    <label class="f" for="pName">Trainee's name</label>
-    <input type="text" id="pName" name="trainee" required>
-    <div class="two">
-      <div><label class="f" for="pMem">SSANZ membership no.</label><input type="text" inputmode="numeric" id="pMem" name="membership"></div>
-      <div><label class="f" for="pDate">Date</label><input type="date" id="pDate" name="date" required></div>
-    </div>
-    <label class="f" for="pEmail">Trainee's email<span class="hint">Optional. They'll get a copy.</span></label>
-    <input type="email" id="pEmail" name="traineeEmail">
-    <label class="f" for="pHost">Host organisation</label>
-    <input type="text" id="pHost" name="host" list="hostList" required>
-    <label class="f">Element being judged</label>
-    <div class="chips" data-chips="element" data-options="Container|Interior|Exterior|Vehicle|Buried Hide|Other"></div>
-    <input type="text" name="elementOther" placeholder="Type the element" hidden style="margin-top:8px">
-    <div class="two">
-      <div><label class="f" for="pE">Teams entered (E)</label><input type="number" inputmode="numeric" min="0" id="pE" name="entered"></div>
-      <div><label class="f" for="pS">Sourced in time (S)</label><input type="number" inputmode="numeric" min="0" id="pS" name="sourced"></div>
-    </div>
-    <h3>Coaching given</h3>
-    <p class="small muted">Tick the areas where you gave coaching and guidance, through to letting the trainee take the lead under your supervision.</p>
-    <div id="proboAreas"></div>
-    <label class="f" for="pComments">Coaching judge's comments</label>
-    <textarea id="pComments" name="comments" data-voice></textarea>
-    <div class="actions">
-      <button class="btn block" type="submit">Create email to JDSC</button>
-      <button class="btn ghost block" type="button" data-clear>Clear form</button>
-    </div>
-    <p class="small muted">Your name and Google email stand in for your signature.</p>
-  </form>
+<!-- ONE TRAINING RECORD (trainee, supervisor or JDSC) -->
+<section data-view="review" hidden>
+  <div id="reviewBody"></div>
+</section>
+
+<!-- COMBINED REPORT (print or save as PDF) -->
+<section data-view="report" hidden>
+  <div id="reportBody"></div>
+</section>
+
+<!-- JDSC ADMIN -->
+<section data-view="admin" hidden>
+  <div id="adminBody"></div>
+</section>
+
+<!-- MY TRAINING -->
+<section data-view="training" hidden>
+  <div id="trainingBody"></div>
 </section>
 
 </main>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="forms.js"></script>
+<script src="judges.js"></script>
+<script src="training.js"></script>
 <script src="app.js"></script>
+<script src="training-ui.js"></script>
 </body>
 </html>

@@ -97,3 +97,83 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
   padding: 12px 18px; border-radius: 10px; font-size: 15px; max-width: calc(100% - 32px); z-index: 20; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
 [hidden] { display: none !important; }
 footer.foot { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+
+/* Home: who is using the app and their judging status */
+.who { margin-top: 4px; }
+.who-name { display: block; font-family: var(--font-display); font-size: 22px; line-height: 1.2; }
+.who-status { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.who-level { font-weight: 700; }
+.pill { display: inline-block; font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.pill.ok { background: var(--accent-soft); border-color: transparent; }
+.pill.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+.pill.bad { background: var(--bad-soft); border-color: transparent; color: var(--bad); }
+.tiny { font-size: 12px; margin-top: 8px; }
+
+/* My training: progress dots */
+.big { font-family: var(--font-display); font-size: 26px; margin-right: 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 2px 4px; color: var(--muted); }
+.legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.prog h3 { margin: 0 0 10px; color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 17px; }
+.prog.past { opacity: .85; }
+.prow { display: grid; grid-template-columns: 92px 1fr; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); }
+.prow .el { font-size: 15px; }
+.dots { display: flex; gap: 8px; flex-wrap: wrap; }
+.dot { display: inline-block; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--muted); box-sizing: border-box; flex: none; }
+.dot.done { background: var(--accent); border-color: var(--accent); }
+.dot.logged { border-color: var(--warn); background: linear-gradient(90deg, var(--warn) 50%, transparent 50%); }
+.dot.booked { border: 2px dashed var(--accent); }
+.dot.credit { background: var(--line); border-color: var(--line); }
+.dot.check { border-color: var(--bad); border-style: dotted; }
+.dot.na { border-color: transparent; }
+.prog details { margin-top: 10px; }
+.prog summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+ul.plain { padding-left: 18px; margin: 8px 0 0; }
+ul.plain li { margin: 4px 0; }
+
+/* Training records: To do, record view, admin */
+.status.todo { background: var(--warn-soft); text-decoration: none; color: var(--ink); }
+a.linkrow { display: block; text-decoration: none; color: inherit; }
+a.linkrow:hover .top span:first-child { text-decoration: underline; }
+.dot.waiting { border-color: var(--warn); background: linear-gradient(90deg, var(--warn) 50%, transparent 50%); }
+.dot.logged { border: 2px dashed var(--warn); background: none; }
+a.dotlink { display: inline-flex; }
+.kv { display: grid; grid-template-columns: 42% 1fr; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.kv > span { color: var(--muted); }
+.kv > div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.card h3 { margin: 14px 0 6px; }
+.card h4 { margin: 16px 0 4px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.area { padding: 6px 0 10px; border-bottom: 1px solid var(--line); }
+.area input[type=text] { margin-top: 6px; }
+.area-done { display: grid; grid-template-columns: 26px 1fr; gap: 6px; padding: 6px 0; border-top: 1px solid var(--line); }
+.tickmark { font-weight: 700; color: var(--accent); font-size: 18px; }
+.prow.admin { grid-template-columns: 80px 1fr; align-items: start; }
+.slots { display: grid; gap: 6px; }
+.slot { display: flex; align-items: center; gap: 6px; }
+.slot select { flex: 1; min-height: 38px; font: inherit; font-size: 15px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.tick.inline { margin: 12px 0 0; }
+
+/* Approved appointments and admin sets */
+h3.sub { font-size: 14px; margin: 14px 2px 0; }
+.row-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.setsrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.setsrow .hint { display: block; font-size: 13px; color: var(--muted); }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.stepper button { border: 0; background: var(--surface); color: var(--accent); font-size: 22px; width: 44px; height: 40px; cursor: pointer; }
+.stepper button:disabled { color: var(--line); cursor: default; }
+.stepper output { min-width: 32px; text-align: center; font-weight: 700; font-size: 18px; }
+.chipbtn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 8px 16px; font: inherit; font-size: 15px; cursor: pointer; }
+.chipbtn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.dotbtn { border: 0; background: none; padding: 4px; margin: -4px; cursor: pointer; display: inline-flex; }
+
+/* Combined training report */
+table.summary { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+table.summary td { padding: 5px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+@media print {
+  header.top, .toast, .no-print, .actions { display: none !important; }
+  body { background: #fff; color: #000; font-size: 11pt; }
+  .wrap { max-width: none; padding: 0; }
+  .card { border: 0; padding: 0; margin: 0 0 12px; }
+  .report-rec { break-before: page; }
+  .pill { border: 1px solid #999; background: none !important; color: #000 !important; }
+  a { color: #000; text-decoration: none; }
+}

@@ -8,9 +8,12 @@ const CONFIG = {
   clientId: '533170210383-h3he3p3qp3vbhfg8i98878fi7p3hk3o0.apps.googleusercontent.com',
   apiKey: 'AIzaSyDzWopanHu4jc-3-sAsvfBq6kipJ5zWimw',
   appId: '533170210383',
-  scope: 'https://www.googleapis.com/auth/drive.file',
+  scope: 'https://www.googleapis.com/auth/drive.file openid email',
+  // Web app address of the JDSC helper script (Deploy > Web app URL). Training records need it.
+  apiUrl: 'https://script.google.com/macros/s/AKfycbywCXEqURDAO11M8BgMQ41gxIOAgjFokbFJItgp0q27XqFMa--86rNu3JR1hz3l_iIK-Q/exec',
   jdsc: 'ssanzjdsubcommittee@gmail.com',
-  tabs: ['SSANZ', 'Dogs NZ', 'Other'],
+  tabs: ['SSANZ', 'Dogs NZ', 'Other', 'Training'],
+  trainingTab: 'Training',
 };
 
 /* ---------- storage ---------- */
@@ -35,6 +38,11 @@ const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const nzDate = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ''); };
+const isoDate = (v) => {
+  v = String(v || '').trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v); if (m) return m[0];
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v); return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+};
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 let toastTimer;
 function toast(msg, ms = 3500) {
@@ -118,8 +126,8 @@ function addVoice(root = document) {
 
 /* ---------- views ---------- */
 const TITLES = {
-  home: 'SSANZ Judge Log', settings: 'My details', log: 'Log an appointment', record: 'My record',
-  swi: 'Stewarding with Intent', probo: 'Probationary coaching',
+  home: 'SSANZ Judge Log', settings: 'My details', log: 'Log a search', record: 'My record', training: 'My training',
+  todo: 'To do', review: 'Training record', admin: 'JDSC admin', report: 'Training report',
 };
 function route() {
   const [view, arg] = (location.hash.replace(/^#/, '') || 'home').split('/');
@@ -133,13 +141,51 @@ function route() {
   if (name === 'settings') renderSettings();
   if (name === 'log') openLogForm(arg);
   if (name === 'record') renderRecord();
-  if (name === 'swi' || name === 'probo') restoreDraft(name === 'swi' ? $('#swiForm') : $('#proboForm'));
+  if (name === 'training') renderTraining();
+  if (name === 'todo') renderTodo();
+  if (name === 'review') renderReview(arg);
+  if (name === 'report') renderReport(arg);
+  if (name === 'admin') renderAdmin(arg ? decodeURIComponent(arg) : '');
 }
 
 /* ---------- home ---------- */
-function pendingCount() { return entries().filter((e) => e.status !== 'synced').length; }
+function pendingCount() {
+  const fileId = settings().fileId;
+  return entries().filter((e) => (TRAINING_FORMS[e.kind] && CONFIG.apiUrl && (!e.sent || e.changed)) || (fileId && e.status !== 'synced') || (!fileId && !TRAINING_FORMS[e.kind])).length;
+}
+/* Who is using the app, and their status from the SSANZ judges list (judges.js).
+ * Matched on the email in My details first, then on the name. */
+async function judgeCode(text) {
+  const norm = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!norm || !(window.crypto && crypto.subtle)) return '';
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('ssanz-judge-log|' + norm));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+}
+async function findJudge(s) {
+  if (typeof JUDGES === 'undefined') return null;
+  const e = await judgeCode(s.email), n = await judgeCode(s.name);
+  return (e && JUDGES.find((j) => j.e === e)) || (n && JUDGES.find((j) => j.n === n)) || null;
+}
+async function renderWho() {
+  const box = $('#homeWho'); const s = settings();
+  if (!box) return;
+  if (!s.name) { box.innerHTML = ''; return; }
+  const j = await findJudge(s);
+  let status;
+  if (j) {
+    const cls = j.s === 'Active' ? 'ok' : j.s === 'Resigned' ? 'bad' : 'warn';
+    status = `<span class="who-level">${esc(j.l)}</span> <span class="pill ${cls}">${esc(j.s)}</span>` +
+      (j.m ? ` <span class="pill">Can be mentored</span>` : '');
+  } else {
+    status = `<span class="muted small">Not found on the SSANZ judges list. Check your name and email under <a href="#settings">My details</a>, or ask the JDSC.</span>`;
+  }
+  box.innerHTML = `<div class="card who"><b class="who-name">${esc(s.name)}</b><div class="who-status">${status}</div>` +
+    (j && typeof JUDGES_AS_AT !== 'undefined' ? `<div class="muted tiny">Judges list as at ${esc(JUDGES_AS_AT)}</div>` : '') + `</div>`;
+}
+
 function renderHome() {
   const s = settings(); const n = pendingCount();
+  renderWho(); renderTrainingTile(); renderHomeTodo();
   let html = '';
   if (!s.name) html += `<div class="status warn"><span class="grow">Welcome! Start by adding your name and choosing your Judging Record.</span><a class="btn small" href="#settings">Set up</a></div>`;
   else if (!s.fileId) html += `<div class="status warn"><span class="grow">Choose your Judging Record so entries can be saved to it.</span><a class="btn small" href="#settings">Choose</a></div>`;
@@ -152,7 +198,8 @@ function renderHome() {
 /* ---------- settings ---------- */
 function renderSettings() {
   const s = settings();
-  $('#setName').value = s.name || ''; $('#setEmail').value = s.email || '';
+  $('#setName').value = s.name || ''; $('#setEmail').value = s.email || ''; $('#setMember').value = s.membership || '';
+  $('#signedInAs').textContent = signedInEmail ? `Signed in to Google as ${signedInEmail}.` : '';
   $('#recordCard').innerHTML = s.fileId
     ? `<b>${esc(s.fileName || 'Judging Record')}</b><p class="small muted">Entries are written to this spreadsheet.</p>
        <a class="small" target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(s.fileId)}/edit">Open in Google Sheets</a>`
@@ -162,6 +209,7 @@ function renderSettings() {
 }
 
 /* ---------- Google sign-in and file picker ---------- */
+let signedInEmail = '';
 let accessToken = null, tokenExpiry = 0, tokenClient = null, pendingTokenResolve = null, pendingTokenReject = null;
 let gisReady = false, pickerReady = false;
 
@@ -181,7 +229,7 @@ function loadGoogle() {
         if (resp.error) { if (pendingTokenReject) pendingTokenReject(new Error(resp.error)); }
         else {
           accessToken = resp.access_token; tokenExpiry = Date.now() + (resp.expires_in - 60) * 1000;
-          saveSettings({ consented: true });
+          saveSettings({ consented2: true });
           if (pendingTokenResolve) pendingTokenResolve(accessToken);
         }
         pendingTokenResolve = pendingTokenReject = null;
@@ -195,14 +243,15 @@ function loadGoogle() {
   }).catch(() => {});
 }
 /* Must be called straight from a tap, so phones allow the sign-in pop-up. */
-function getToken() {
-  if (accessToken && Date.now() < tokenExpiry) return Promise.resolve(accessToken);
+function getToken(opts = {}) {
+  if (!opts.chooseAccount && accessToken && Date.now() < tokenExpiry) return Promise.resolve(accessToken);
   if (!navigator.onLine) return Promise.reject(new Error('offline'));
   if (!gisReady) { loadGoogle(); return Promise.reject(new Error('loading')); }
   return new Promise((resolve, reject) => {
     pendingTokenResolve = resolve; pendingTokenReject = reject;
     const s = settings();
-    tokenClient.requestAccessToken({ prompt: s.consented ? '' : 'consent', login_hint: s.email || undefined });
+    if (opts.chooseAccount) { accessToken = null; signedInEmail = ''; }
+    tokenClient.requestAccessToken({ prompt: opts.chooseAccount ? 'select_account' : (s.consented2 ? '' : 'consent'), login_hint: opts.hint || s.email || undefined });
   });
 }
 function explainTokenError(e) {
@@ -268,26 +317,47 @@ async function checkRecord(fileId) {
 const textCell = (v) => { v = String(v || ''); return /^[=+\-@]/.test(v) ? "'" + v : v; };
 const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 
+const TRAINING_HEADER = ['Date', 'Host Organisation', 'Trial Location', 'Who Set the Hide(s)?', 'Level', 'Element', 'Teams',
+  'Passes *', 'Pass Rate', 'Photo/Video Link', 'Reflections', 'Training Type', 'Supervising Judge'];
+async function addTrainingTab(fileId) {
+  const res = await api(`${fileId}:batchUpdate`, { method: 'POST', body: { requests: [{ addSheet: { properties: {
+    title: CONFIG.trainingTab, gridProperties: { rowCount: 200, columnCount: 13, frozenRowCount: 1 } } } }] } });
+  await api(`${fileId}/values/${q(CONFIG.trainingTab)}!A1:M1?valueInputOption=RAW`, { method: 'PUT', body: { values: [TRAINING_HEADER] } });
+  const sheetId = res.replies[0].addSheet.properties.sheetId;
+  await api(`${fileId}:batchUpdate`, { method: 'POST', body: { requests: [{ repeatCell: {
+    range: { sheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: 'userEnteredFormat.textFormat.bold' } }] } });
+  return res.replies[0].addSheet.properties;
+}
+
 async function syncTab(fileId, tab, list, sheetProps) {
+  const training = tab === CONFIG.trainingTab;
   const rowCount = sheetProps.gridProperties.rowCount;
-  const got = await api(`${fileId}/values/${q(tab)}!A1:L${rowCount}?valueRenderOption=FORMULA`);
+  const got = await api(`${fileId}/values/${q(tab)}!A1:M${rowCount}?valueRenderOption=FORMULA`);
   const rows = got.values || [];
   let last = 0; // last row (1-based) with data the judge typed
-  rows.forEach((r, i) => { if (i > 0 && [0, 1, 2, 3, 4, 5, 6, 7, 9, 10].some((c) => r[c] !== undefined && r[c] !== '')) last = i + 1; });
+  const typed = training ? [0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12] : [0, 1, 2, 3, 4, 5, 6, 7, 9, 10];
+  rows.forEach((r, i) => { if (i > 0 && typed.some((c) => r[c] !== undefined && r[c] !== '')) last = i + 1; });
   let next = Math.max(last + 1, 2);
 
   const data = []; const done = [];
   for (const e of list) {
     // Already written on an earlier sync whose reply was lost? Don't add it twice.
     const dup = rows.findIndex((r, i) => i > 0 && same(r[1], e.host) && same(r[4], e.level) && same(r[5], e.element) &&
-      String(r[6]) === String(e.teams) && String(r[7]) === String(e.passes) && same(r[10], e.reflections));
+      String(r[6] ?? '') === String(e.teams) && String(r[7] ?? '') === String(e.passes) && same(r[10], e.reflections) &&
+      (!training || same(r[11], e.kind)));
     if (dup > 0) { done.push([e, dup + 1]); continue; }
     const r = next++;
     const existing = rows[r - 1] || [];
-    data.push({ range: `'${tab}'!A${r}:H${r}`, values: [[e.date, textCell(e.host), textCell(e.location), textCell(e.setter), e.level, textCell(e.element), Number(e.teams), Number(e.passes)]] });
+    const num = (v) => (v === '' || v == null ? '' : Number(v));
+    data.push({ range: `'${tab}'!A${r}:H${r}`, values: [[e.date, textCell(e.host), textCell(e.location), textCell(e.setter), e.level, textCell(e.element), num(e.teams), num(e.passes)]] });
     data.push({ range: `'${tab}'!J${r}:K${r}`, values: [[textCell(e.video), textCell(e.reflections)]] });
-    if (!existing[8]) data.push({ range: `'${tab}'!I${r}`, values: [[`=(H${r}/G${r})`]] });
-    if (!existing[11]) data.push({ range: `'${tab}'!L${r}`, values: [[r === 2 ? '=I2' : `=AVERAGE($I$2:I${r})`]] });
+    if (training) {
+      data.push({ range: `'${tab}'!L${r}:M${r}`, values: [[e.kind, textCell(e.supervisor)]] });
+      data.push({ range: `'${tab}'!I${r}`, values: [[`=IF(AND(ISNUMBER(G${r}),G${r}>0,ISNUMBER(H${r})),H${r}/G${r},"")`]] });
+    } else {
+      if (!existing[8]) data.push({ range: `'${tab}'!I${r}`, values: [[`=(H${r}/G${r})`]] });
+      if (!existing[11]) data.push({ range: `'${tab}'!L${r}`, values: [[r === 2 ? '=I2' : `=AVERAGE($I$2:I${r})`]] });
+    }
     done.push([e, r]);
   }
   const needRows = next - 1 - rowCount;
@@ -299,7 +369,7 @@ async function syncTab(fileId, tab, list, sheetProps) {
 }
 
 async function fetchHistory(fileId, tabs) {
-  const ranges = tabs.map((t) => 'ranges=' + q(t) + '!A2:L').join('&');
+  const ranges = tabs.map((t) => 'ranges=' + q(t) + '!A2:M').join('&');
   const got = await api(`${fileId}/values:batchGet?${ranges}`);
   const history = {};
   got.valueRanges.forEach((vr, i) => {
@@ -310,35 +380,51 @@ async function fetchHistory(fileId, tabs) {
 }
 
 let syncing = false;
+/* Sync: send training records to supervisors, write searches to the Judging Record, refresh To do and progress.
+ * Must start from a tap, so the Google sign-in pop-up is allowed. */
 function syncNow() {
   const s = settings();
-  if (!s.fileId) { toast('Choose your Judging Record first.'); location.hash = 'settings'; return; }
+  if (!s.fileId && !CONFIG.apiUrl) { toast('Choose your Judging Record first.'); location.hash = 'settings'; return; }
   if (syncing) return;
   getToken().then(async () => {
     syncing = true; setSyncButtons('Syncing…');
+    const notes = [];
     try {
-      const meta = await api(`${s.fileId}?fields=sheets.properties(sheetId,title,gridProperties)`);
-      const props = {}; meta.sheets.forEach((sh) => { props[sh.properties.title] = sh.properties; });
-      const tabs = CONFIG.tabs.filter((t) => props[t]);
-      const pending = entries().filter((e) => e.status !== 'synced');
-      let written = 0;
-      for (const tab of new Set(pending.map((e) => e.tab))) {
-        if (!props[tab]) { toast(`Your Judging Record has no "${tab}" tab — those entries are still on this phone.`, 6000); continue; }
-        const done = await syncTab(s.fileId, tab, pending.filter((e) => e.tab === tab), props[tab]);
-        const list = entries();
-        done.forEach(([e, row]) => { const x = list.find((y) => y.id === e.id); if (x) { x.status = 'synced'; x.row = row; } });
-        saveEntries(list); written += done.length;
+      if (CONFIG.apiUrl) {
+        const sent = await sendTrainingRecords();
+        if (sent) notes.push(`${sent} training record${sent > 1 ? 's' : ''} sent to your supervisor`);
       }
-      // Keep the phone tidy: forget synced entries once they're in the sheet.
-      saveEntries(entries().filter((e) => e.status !== 'synced'));
-      await fetchHistory(s.fileId, tabs);
-      saveSettings({ lastSync: Date.now(), tabs });
-      toast(written ? `Synced ${written} ${written === 1 ? 'entry' : 'entries'} to your Judging Record.` : 'Your record is up to date.');
+      if (s.fileId) {
+        const meta = await api(`${s.fileId}?fields=sheets.properties(sheetId,title,gridProperties)`);
+        const props = {}; meta.sheets.forEach((sh) => { props[sh.properties.title] = sh.properties; });
+        const tabs = CONFIG.tabs.filter((t) => props[t]);
+        const pending = entries().filter((e) => e.status !== 'synced');
+        let written = 0;
+        if (pending.some((e) => e.tab === CONFIG.trainingTab) && !props[CONFIG.trainingTab]) {
+          props[CONFIG.trainingTab] = await addTrainingTab(s.fileId);
+          tabs.push(CONFIG.trainingTab);
+        }
+        for (const tab of new Set(pending.map((e) => e.tab))) {
+          if (!props[tab]) { toast(`Your Judging Record has no "${tab}" tab — those entries are still on this phone.`, 6000); continue; }
+          const done = await syncTab(s.fileId, tab, pending.filter((e) => e.tab === tab), props[tab]);
+          const list = entries();
+          done.forEach(([e, row]) => { const x = list.find((y) => y.id === e.id); if (x) { x.status = 'synced'; x.row = row; } });
+          saveEntries(list); written += done.length;
+        }
+        await fetchHistory(s.fileId, tabs);
+        saveSettings({ lastSync: Date.now(), tabs });
+        if (written) notes.push(`${written} ${written === 1 ? 'entry' : 'entries'} added to your Judging Record`);
+      }
+      // Keep the phone tidy: forget entries once they're in the sheet (and, for training, sent to the supervisor).
+      saveEntries(entries().filter((e) => e.status !== 'synced' || (TRAINING_FORMS[e.kind] && CONFIG.apiUrl && !e.sent)));
+      if (CONFIG.apiUrl) await refreshMe();
+      toast(notes.length ? notes.join('. ') + '.' : 'Everything is up to date.', 5000);
     } catch (e) {
       toast(e.message, 6000);
     } finally {
       syncing = false; setSyncButtons(); renderHome();
       if (!$('[data-view=record]').hidden) renderRecord();
+      if (!$('[data-view=training]').hidden) renderTraining();
     }
   }).catch(explainTokenError);
 }
@@ -360,22 +446,80 @@ function fillDatalists() {
 }
 function openLogForm(id) {
   const f = logForm(); fillDatalists();
-  const e = id ? entries().find((x) => x.id === id) : null;
-  const draft = !e && store.get('draft.log', null);
-  const v = e || draft || {};
+  const newTraining = id === 'new-training';
+  const apptMatch = /^appt-(\d+)$/.exec(id || '');
+  const e = id && !newTraining && !apptMatch ? entries().find((x) => x.id === id) : null;
+  const draft = !e && !apptMatch && store.get('draft.log', null);
+  let v = e || draft || {};
+  if (apptMatch) {
+    // Pre-fill from an approved appointment in the JDSC's trial list.
+    const a = ((cachedMe() || {}).appointments || [])[+apptMatch[1]];
+    if (a) v = { kind: a.kind, date: a.date, host: a.host, location: a.venue && a.venue !== 'TBC' ? a.venue : '', level: a.level, element: a.element, supervisor: a.supervisor, extras: {} };
+  }
+  if (newTraining && (!v.kind || v.kind === 'Judging')) v = Object.assign({}, v, { kind: '' });
+  // Only offer the training the JDSC has approved for this stage.
+  allowedKinds().then((kinds) => {
+    const keep = e ? e.kind : null;
+    $$('[data-chips=kind] input', f).forEach((inp) => {
+      const show = inp.value === 'Judging' || kinds.includes(inp.value) || inp.value === keep;
+      inp.hidden = !show; const lab = f.querySelector(`label[for="${inp.id}"]`); if (lab) lab.hidden = !show;
+    });
+    if (newTraining && !chipValue(f, 'kind') || (newTraining && chipValue(f, 'kind') === 'Judging' && kinds.length)) { setChip(f, 'kind', kinds[0] || 'Judging'); showKind(); }
+  });
   f.reset();
   f.entryId.value = e ? e.id : '';
-  setChip(f, 'tab', v.tab || settings().lastTab || 'SSANZ');
+  setChip(f, 'kind', v.kind || 'Judging');
+  setChip(f, 'tab', (v.kind && v.kind !== 'Judging') ? (settings().lastTab || 'SSANZ') : (v.tab || settings().lastTab || 'SSANZ'));
+  f.supervisor.value = v.supervisor || '';
   f.date.value = v.date || today();
   ['host', 'location', 'setter', 'teams', 'passes', 'video', 'reflections'].forEach((k) => { f[k].value = v[k] == null ? '' : v[k]; });
   setChip(f, 'level', v.level || ''); setElement(f, v.element || '');
-  $('#deleteEntry').hidden = !e;
-  updateRate();
+  $('#deleteEntry').hidden = !e || e.sent;
+  showKind(v.extras || {}); updateRate();
+}
+function showKind(values) {
+  const f = logForm(); const kind = chipValue(f, 'kind') || 'Judging'; const form = TRAINING_FORMS[kind];
+  const training = !!form;
+  $('#judgingOnly').hidden = training; $('#trainingOnly').hidden = !training;
+  $('#locLabel').textContent = training ? 'Venue' : 'Trial location';
+  $('#teamsLabel').textContent = training ? 'Teams entered (E)' : 'Teams';
+  $('#passesLabel').innerHTML = training ? 'Sourced in time (S)<span class="hint">Teams that sourced the hide within the time allowed</span>' : 'Passes<span class="hint">Correct calls on all hides in time</span>';
+  $('#reflLabel').textContent = training ? 'Trainee learning / reflections' : 'Reflections';
+  $('#fSup').previousElementSibling.textContent = form ? form.supervisorTitle : 'Supervising judge';
+  const box = $('#trainingExtras');
+  const keep = values || readExtras();
+  box.hidden = !form || !form.traineeExtras.length;
+  box.innerHTML = form ? form.traineeExtras.map(([key, label, type, hint]) => {
+    const h = hint ? `<span class="hint">${esc(hint)}</span>` : '';
+    const v = keep[key] == null ? '' : keep[key];
+    if (type === 'tick') return `<label class="tick inline"><input type="checkbox" data-x="${key}"${v ? ' checked' : ''}><span><b>${esc(label)}</b></span></label>`;
+    if (type === 'number') return `<label class="f" for="x_${key}">${esc(label)}</label><input type="number" inputmode="numeric" min="0" id="x_${key}" data-x="${key}" value="${esc(v)}">`;
+    if (type.startsWith('chips:')) return `<label class="f">${esc(label)}${h}</label><div class="chips">${type.slice(6).split('|').map((o, i) =>
+      `<input type="radio" name="x_${key}" id="x_${key}_${i}" data-x="${key}" value="${esc(o)}"${v === o ? ' checked' : ''}><label for="x_${key}_${i}">${esc(o)}</label>`).join('')}</div>`;
+    return `<label class="f" for="x_${key}">${esc(label)}${h}</label><textarea id="x_${key}" data-x="${key}" data-voice>${esc(v)}</textarea>`;
+  }).join('') : '';
+  addVoice(box);
+}
+function readExtras() {
+  const out = {};
+  $$('#trainingExtras [data-x]').forEach((el) => {
+    const k = el.dataset.x;
+    if (el.type === 'checkbox') out[k] = el.checked;
+    else if (el.type === 'radio') { if (el.checked) out[k] = el.value; }
+    else out[k] = el.value.trim();
+  });
+  return out;
+}
+function fillSupervisors() {
+  const names = typeof JUDGE_NAMES !== 'undefined' ? JUDGE_NAMES : [];
+  $('#supList').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
 }
 function readLogForm() {
   const f = logForm();
+  const kind = chipValue(f, 'kind') || 'Judging';
   return {
-    id: f.entryId.value || uid(), tab: chipValue(f, 'tab') || 'SSANZ', date: f.date.value, host: f.host.value.trim(), location: f.location.value.trim(),
+    id: f.entryId.value || uid(), kind, tab: kind === 'Judging' ? (chipValue(f, 'tab') || 'SSANZ') : CONFIG.trainingTab,
+    supervisor: kind === 'Judging' ? '' : f.supervisor.value.trim(), extras: kind === 'Judging' ? {} : readExtras(), date: f.date.value, host: f.host.value.trim(), location: f.location.value.trim(),
     setter: f.setter.value.trim(), level: chipValue(f, 'level'), element: elementValue(f), teams: f.teams.value, passes: f.passes.value,
     video: f.video.value.trim(), reflections: f.reflections.value.trim(),
   };
@@ -388,6 +532,7 @@ function updateRate() {
 }
 
 /* ---------- record view ---------- */
+let recordItems = [];
 function renderRecord() {
   const s = settings(); const f = $('[data-view=record]');
   buildChips(f);
@@ -400,132 +545,41 @@ function renderRecord() {
   else status = `<p class="small muted">Tap “Sync and refresh” to load your history.</p>`;
   $('#recordStatus').innerHTML = status;
 
+  const isTraining = tab === CONFIG.trainingTab;
   const rates = [], all = hist.map((x) => ({ teams: +x.r[6] || 0, passes: +x.r[7] || 0 }));
   all.forEach((x) => { if (x.teams) rates.push(x.passes / x.teams); });
   const teams = all.reduce((a, x) => a + x.teams, 0);
   const avg = rates.length ? Math.round((rates.reduce((a, b) => a + b, 0) / rates.length) * 100) + '%' : '–';
   $('#recordStats').innerHTML =
-    `<div class="stat"><b>${hist.length}</b><span>Appointments</span></div>` +
-    `<div class="stat"><b>${teams}</b><span>Teams judged</span></div>` +
+    `<div class="stat"><b>${hist.length}</b><span>${isTraining ? 'Training searches' : 'Searches judged'}</span></div>` +
+    `<div class="stat"><b>${teams}</b><span>Teams</span></div>` +
     `<div class="stat"><b>${avg}</b><span>Average pass rate</span></div>`;
 
   const rowHtml = (d) => `<div class="entry">
-      <div class="top"><span>${esc(d.level)} ${esc(d.element)}</span><span>${esc(d.dateText)}</span></div>
-      <div class="meta">${esc([d.host, d.location].filter(Boolean).join(' · '))}${d.teams !== '' ? ` · ${esc(d.passes)}/${esc(d.teams)} passed` : ''}${d.setter ? ` · Hides: ${esc(d.setter)}` : ''}</div>
+      <div class="top"><span>${d.kind && d.kind !== 'Judging' ? esc(d.kind) + ': ' : ''}${esc(d.level)} ${esc(d.element)}</span><span>${esc(d.dateText)}</span></div>
+      <div class="meta">${esc([d.host, d.location].filter(Boolean).join(' · '))}${d.teams !== '' ? ` · ${d.passes !== '' ? esc(d.passes) + '/' + esc(d.teams) + ' passed' : esc(d.teams) + ' teams'}` : ''}${d.setter ? ` · Hides: ${esc(d.setter)}` : ''}${d.supervisor ? ` · Supervising judge: ${esc(d.supervisor)}` : ''}</div>
       ${d.video ? `<div class="small"><a href="${esc(d.video)}" target="_blank" rel="noopener">Video</a></div>` : ''}
       ${d.reflections ? `<div class="refl">${esc(d.reflections)}</div>` : ''}
       ${d.pending ? `<div style="margin-top:8px"><span class="pill">Waiting to sync</span> <a class="small" href="#log/${esc(d.id)}">Edit</a></div>` : ''}
+      ${d.kind && d.kind !== 'Judging' ? `<div style="margin-top:8px"><a class="small" href="#training">See supervisor comments in My training</a></div>` : ''}
     </div>`;
   const items = pend.map((e) => ({ ...e, dateText: nzDate(e.date), pending: true }))
-    .concat(hist.slice().reverse().map((x) => ({ dateText: x.r[0], host: x.r[1], location: x.r[2], setter: x.r[3], level: x.r[4], element: x.r[5], teams: x.r[6] || '', passes: x.r[7] || '', video: /^https?:/.test(x.r[9] || '') ? x.r[9] : '', reflections: x.r[10] })));
-  $('#recordList').innerHTML = items.length ? items.map(rowHtml).join('') : '<p class="muted">Nothing here yet.</p>';
+    .concat(hist.slice().reverse().map((x) => ({ date: isoDate(x.r[0]), dateText: x.r[0], host: x.r[1], location: x.r[2], setter: x.r[3], level: x.r[4], element: x.r[5], teams: x.r[6] ?? '', passes: x.r[7] ?? '', video: /^https?:/.test(x.r[9] || '') ? x.r[9] : '', reflections: x.r[10],
+      kind: isTraining ? (x.r[11] || 'Training') : 'Judging', supervisor: isTraining ? x.r[12] : '' })));
+  items.forEach((d, i) => { d.idx = i; });
+  recordItems = items;
+  $('#recordList').innerHTML = items.length ? items.map(rowHtml).join('') : `<p class="muted">${isTraining ? 'No training searches logged yet.' : 'Nothing here yet.'}</p>`;
   const open = $('#openSheet');
   open.hidden = !s.fileId;
   if (s.fileId) open.href = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(s.fileId)}/edit`;
 }
 
-/* ---------- training forms (emailed to JDSC) ---------- */
-const SWI_QUESTIONS = [
-  'Assist the judge to set up the search area?',
-  'Ask relevant questions about the search area / hide placement?',
-  'Know how to use a stopwatch?',
-  'Explain clearly the parameters of the search area and give relevant information concisely, without unnecessary delay?',
-  'Show a friendly demeanour that allowed handlers to ask questions?',
-  'Give teams space?',
-  'Stand consistently at the start and during the search?',
-  'Keep a neutral stance and minimise movement?',
-  'Appear actively interested in watching the search teams?',
-  'Overall, were you happy with their stewarding?',
-  'Were there any issues or areas for improvement?',
-];
-const PROBO_AREAS = [
-  ['Set-Up', 'Review & preparation of search area', 'e.g. check size, address any potential hazards, mark boundaries, "staging" or setting out containers.'],
-  ['Set-Up', 'Hide placement', 'Odour hygiene. Selection, testing and setting of hide vessel & location taking into account environmental factors. Deciding on the "yes" zone.'],
-  ['Set-Up', 'Search readiness', 'Discuss and agree expectations with Steward, including where to stand, & familiarity with stopwatch. Have contingency plans for fouling & damage.'],
-  ['During', 'Judging', 'Make appropriate decisions regarding any faults. Make confident and timely calls for "correct". Accurate completion of judging sheets.'],
-  ['During', 'Focus & consistency', 'Maintain attention and ensure consistency from first team to last. Minimise movement while teams are searching.'],
-  ['During', 'Fouling incident', 'Management of a fouling incident.'],
-  ['During', 'Other event', 'Awareness and management of dropped food, and/or other event that compromises the search area, including but not limited to container hygiene.'],
-  ['After', 'Packing up', 'Removal and disposal of hide vessel with q-tip(s). Separation and identification of any "hot" gear from others.'],
-];
-function buildTrainingForms() {
-  $('#swiQuestions').innerHTML = SWI_QUESTIONS.map((qText, i) =>
-    `<div class="q"><p>${esc(qText)}</p><div class="chips" data-chips="q${i}" data-options="Yes|No"></div></div>`).join('');
-  let group = '';
-  $('#proboAreas').innerHTML = PROBO_AREAS.map(([g, title, desc], i) => {
-    const head = g !== group ? `<h3>${esc(g)}</h3>` : ''; group = g;
-    return `${head}<label class="tick"><input type="checkbox" name="area${i}"><span><b>${esc(title)}</b><span>${esc(desc)}</span></span></label>`;
-  }).join('');
-  $$('#proboAreas h3 + label').forEach((l) => { l.style.marginTop = '0'; });
-  $('#proboAreas').classList.add('ticks');
-}
-
+/* ---------- email helper ---------- */
 function mailto(to, cc, subject, body) {
   let url = 'mailto:' + to + '?subject=' + encodeURIComponent(subject);
   if (cc) url += '&cc=' + encodeURIComponent(cc);
   return url + '&body=' + encodeURIComponent(body);
 }
-function judgeSignature() {
-  const s = settings();
-  return `${s.name || '(name not set)'}${s.email ? ' <' + s.email + '>' : ''}`;
-}
-function sendSwi(f) {
-  if (!settings().name) { toast('Add your name under My details first.'); return; }
-  const missing = SWI_QUESTIONS.filter((_, i) => !chipValue(f, 'q' + i)).length;
-  if (missing && !confirm(`${missing} question${missing > 1 ? 's have' : ' has'} no Yes/No answer. Send anyway?`)) return;
-  const level = chipValue(f, 'level'), element = elementValue(f);
-  const body = [
-    'SSANZ STEWARDING WITH INTENT ASSESSMENT', '',
-    'Name: ' + f.trainee.value.trim(),
-    'Judge: ' + judgeSignature(),
-    'Hosting club: ' + f.host.value.trim(),
-    'Date: ' + nzDate(f.date.value),
-    'Level: ' + (level || '-'),
-    'Element: ' + (element || '-'),
-    'No. of participants: ' + (f.participants.value || '-'), '',
-    'Did they…',
-    ...SWI_QUESTIONS.map((qq, i) => `- ${qq}  ${(chipValue(f, 'q' + i) || '-').toUpperCase()}`), '',
-    'Comments:', f.comments.value.trim() || '-', '',
-    '--- end of assessment ---',
-  ].join('\n');
-  const subject = `[SWI Assessment] ${f.trainee.value.trim()} – ${[level, element].filter(Boolean).join(' ')} – ${nzDate(f.date.value)}`;
-  finishForm(f, 'swi', mailto(CONFIG.jdsc, f.traineeEmail.value.trim(), subject, body));
-}
-function sendProbo(f) {
-  if (!settings().name) { toast('Add your name under My details first.'); return; }
-  const stage = chipValue(f, 'stage') || 'Novice', element = elementValue(f);
-  const ticked = PROBO_AREAS.map((a, i) => [a, f['area' + i].checked]);
-  const body = [
-    `SSANZ ${stage.toUpperCase()} PROBATIONARY JUDGE COACHING FORM`, '',
-    'Trainee: ' + f.trainee.value.trim(),
-    'SSANZ membership no.: ' + (f.membership.value.trim() || '-'),
-    'Date: ' + nzDate(f.date.value),
-    'Host organisation: ' + f.host.value.trim(),
-    'Element judged: ' + (element || '-'),
-    'Teams entered (E): ' + (f.entered.value || '-'),
-    'Teams that sourced the hide in time (S): ' + (f.sourced.value || '-'),
-    'Coaching judge: ' + judgeSignature(), '',
-    'Coaching and guidance given (ticked):',
-    ...['Set-Up', 'During', 'After'].flatMap((g) => [g + ':', ...ticked.filter(([a]) => a[0] === g).map(([a, on]) => `  [${on ? 'x' : ' '}] ${a[1]}`)]), '',
-    "Coaching judge's comments:", f.comments.value.trim() || '-', '',
-    '--- end of coaching form ---',
-  ].join('\n');
-  const subject = `[Probationary Coaching] ${f.trainee.value.trim()} – ${stage} ${element} – ${nzDate(f.date.value)}`;
-  finishForm(f, 'probo', mailto(CONFIG.jdsc, f.traineeEmail.value.trim(), subject, body));
-}
-function finishForm(f, key, url) {
-  const sent = store.get('formsSent', []);
-  sent.unshift({ kind: key, trainee: f.trainee.value.trim(), date: f.date.value, at: Date.now() });
-  store.set('formsSent', sent.slice(0, 50));
-  location.href = url;
-  setTimeout(() => {
-    if (confirm('Did your mail app open with the email ready to send?\n\nOK clears this form. Cancel keeps it so you can try again.')) {
-      clearForm(f);
-      location.hash = 'home';
-    }
-  }, 1500);
-}
-
 /* ---------- drafts (so nothing is lost if the phone closes the app) ---------- */
 function draftKey(f) { return 'draft.' + f.getAttribute('id').replace('Form', ''); }
 function saveDraft(f) {
@@ -560,13 +614,13 @@ function clearForm(f) {
 
 /* ---------- wiring ---------- */
 document.addEventListener('DOMContentLoaded', () => {
-  buildTrainingForms();
   buildChips(); addVoice();
+  fillSupervisors();
   window.addEventListener('hashchange', route);
   $('#backBtn').addEventListener('click', () => { location.hash = 'home'; });
 
   $('#saveDetails').addEventListener('click', () => {
-    saveSettings({ name: $('#setName').value.trim(), email: $('#setEmail').value.trim() });
+    saveSettings({ name: $('#setName').value.trim(), email: $('#setEmail').value.trim(), membership: $('#setMember').value.trim() });
     toast('Details saved.');
   });
   $('#chooseRecord').addEventListener('click', () => {
@@ -576,13 +630,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#signOut').addEventListener('click', () => {
     if (accessToken && window.google) google.accounts.oauth2.revoke(accessToken, () => {});
-    accessToken = null; saveSettings({ consented: false }); renderSettings(); toast('Signed out of Google on this phone.');
+    accessToken = null; signedInEmail = ''; store.set('me', null); saveSettings({ consented2: false }); renderSettings(); toast('Signed out of Google on this phone.');
   });
   $('#syncBtnHome').addEventListener('click', syncNow);
   $('#syncBtnRecord').addEventListener('click', syncNow);
   $('[data-view=record]').addEventListener('change', (e) => { if (e.target.name === 'recordTab') renderRecord(); });
 
   const f = logForm();
+  f.addEventListener('change', (ev) => { if (ev.target.name === 'kind') showKind(); });
   f.addEventListener('input', () => { updateRate(); saveDraft(f); });
   f.addEventListener('change', () => saveDraft(f));
   f.addEventListener('submit', (ev) => {
@@ -590,28 +645,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const e = readLogForm();
     if (!e.level) { toast('Tap a Level.'); return; }
     if (!e.element) { toast('Tap an Element.'); return; }
-    if (+e.passes > +e.teams) { toast('Passes can\'t be more than teams.'); return; }
+    if (e.passes !== '' && +e.passes > +e.teams) { toast('Passes can\'t be more than teams.'); return; }
+    if (e.kind === 'Judging' && e.passes === '') { toast('Add the number of passes.'); return; }
+    const form = TRAINING_FORMS[e.kind];
+    if (form) {
+      if (!e.supervisor) { toast(`Add your ${form.supervisorTitle.toLowerCase()}.`); return; }
+      if (!form.levels.includes(e.level)) { toast(`${e.kind} is for ${form.levels.join(' or ')} level.`); return; }
+      if (!['Interior', 'Exterior', 'Container', 'Vehicle'].includes(e.element)) { toast('Training is recorded for Interior, Exterior, Container or Vehicle.'); return; }
+      const old = entries().find((x) => x.id === e.id);
+      if (old && old.sent) { e.sent = old.sent; e.changed = true; }
+      if (old && old.status === 'synced') e.status = 'synced';
+    }
     const list = entries(); const i = list.findIndex((x) => x.id === e.id);
-    e.status = 'pending'; e.savedAt = Date.now();
+    if (e.status !== 'synced') e.status = 'pending';
+    e.savedAt = Date.now();
     if (i >= 0) list[i] = e; else list.push(e);
     if (!saveEntries(list)) return;
     localStorage.removeItem('jl.draft.log');
-    saveSettings({ lastTab: e.tab });
-    toast(navigator.onLine && settings().fileId ? 'Saved. Tap Sync now to add it to your Judging Record.' : 'Saved on this phone. Sync when you have signal.');
-    location.hash = 'home';
+    if (e.kind === 'Judging') saveSettings({ lastTab: e.tab });
+    if (form) toast(navigator.onLine ? `Saved. Tap Sync now to send it to ${e.supervisor}.` : `Saved on this phone. Sync when you have signal to send it to ${e.supervisor}.`, 5000);
+    else toast(navigator.onLine && settings().fileId ? 'Saved. Tap Sync now to add it to your Judging Record.' : 'Saved on this phone. Sync when you have signal.');
+    location.hash = form ? 'training' : 'home';
   });
   $('#deleteEntry').addEventListener('click', () => {
     const id = f.entryId.value; if (!id || !confirm('Delete this entry from this phone?')) return;
     saveEntries(entries().filter((x) => x.id !== id)); toast('Entry deleted.'); location.hash = 'record';
   });
-
-  [$('#swiForm'), $('#proboForm')].forEach((tf) => {
-    tf.addEventListener('input', () => saveDraft(tf));
-    tf.addEventListener('change', () => saveDraft(tf));
-    $('[data-clear]', tf).addEventListener('click', () => { if (confirm('Clear this form?')) clearForm(tf); });
-  });
-  $('#swiForm').addEventListener('submit', (ev) => { ev.preventDefault(); sendSwi(ev.target); });
-  $('#proboForm').addEventListener('submit', (ev) => { ev.preventDefault(); sendProbo(ev.target); });
 
   window.addEventListener('online', () => { loadGoogle(); renderHome(); });
   window.addEventListener('offline', renderHome);
