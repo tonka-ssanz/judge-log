@@ -162,8 +162,9 @@ function signOutGoogle() {
   const s = settings();
   // If the JDSC address was typed into My details, take it out again.
   if (isJdscEmail(s.email)) saveSettings({ email: '', consented2: false }); else saveSettings({ consented2: false });
+  // ...and the committee's name, if it was typed in as "your name".
+  if (/judges development|\bjdsc\b/i.test(settings().name || '')) saveSettings({ name: '' });
 }
-
 /* ---------- home ---------- */
 function pendingCount() {
   const fileId = settings().fileId;
@@ -712,10 +713,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#signOut').addEventListener('click', () => {
     const wasJdsc = isJdscAccount();
-    signOutGoogle(); renderSettings(); toast(wasJdsc ? 'Signed out of the JDSC account.' : 'Signed out of Google on this phone.');
+    signOutGoogle(); toast(wasJdsc ? 'Signed out of the JDSC account.' : 'Signed out of Google on this phone.');
+    if (wasJdsc) location.hash = 'admin'; else renderSettings();
   });
   $('#jdscSignOutHome').addEventListener('click', () => {
-    signOutGoogle(); renderHome(); toast('Signed out of the JDSC account.');
+    signOutGoogle(); toast('Signed out of the JDSC account.'); location.hash = 'admin';   // back to the admin sign-in page
   });
   $('#syncBtnHome').addEventListener('click', syncNow);
   $('#syncBtnRecord').addEventListener('click', syncNow);

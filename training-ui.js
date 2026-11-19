@@ -520,14 +520,16 @@ async function renderAdmin(email) {
   const box = $('#adminBody');
   const me = cachedMe();
   if (!me || !me.isAdmin) {
-    box.innerHTML = `<div class="card"><p>The JDSC admin screen needs the JDSC Gmail (${esc(CONFIG.jdsc)}).</p>` +
-      (me ? `<p class="small muted">You're signed in as ${esc(me.email)}.</p>` : '') +
+    // The admin sign-in page: bookmark https://tonka-ssanz.github.io/judge-log/#admin
+    box.innerHTML = `<div class="card"><h2 style="margin-top:0">JDSC admin</h2>
+      <p>Sign in with the JDSC Gmail (${esc(CONFIG.jdsc)}) to see judges, trainees and training records.</p>` +
+      (me && me.email ? `<p class="small muted">This browser is signed in to the Judge Log as ${esc(me.email)}.</p>` : '') +
       `<button class="btn block" data-admin-signin>Sign in with the JDSC account</button></div>`;
     $('[data-admin-signin]', box).addEventListener('click', (ev) => {
       const b = ev.currentTarget; if (b.dataset.busy) return;
       b.dataset.busy = '1'; b.disabled = true; b.textContent = 'Signing in…';
       getToken({ chooseAccount: true, hint: CONFIG.jdsc }).then(() => { b.textContent = 'Checking your account…'; return refreshMe(); }).then((m) => {
-        if (!m.isAdmin) toast(`${m.email} isn't a JDSC admin account.`, 6000);
+        if (!m.isAdmin) toast(`${m.email} isn't the JDSC account. Choose ${CONFIG.jdsc}.`, 6000);
         renderAdmin(email);
       }).catch((e) => {
         delete b.dataset.busy; b.disabled = false; b.textContent = 'Sign in with the JDSC account';
