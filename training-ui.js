@@ -15,7 +15,7 @@ async function callApi(action, data = {}) {
   let out;
   try { out = await res.json(); } catch (e) { throw new Error('The JDSC training records didn\'t answer properly. Please tell the JDSC.'); }
   if (!out.ok) {
-    if (/expired/i.test(out.error)) accessToken = null;
+    if (/expired/i.test(out.error)) clearToken();
     throw new Error(out.error);
   }
   return out;
@@ -319,10 +319,10 @@ function renderHomeTodo() {
 }
 
 /* ---------- To do (supervising judge) ---------- */
-function signInPrompt(box, why, after) {
+function signInPrompt(box, why, after, hint) {
   box.innerHTML = `<div class="card"><p>${esc(why)}</p><button class="btn block" data-signin>Sign in with Google</button></div>`;
   $('[data-signin]', box).addEventListener('click', () => {
-    getToken().then(() => refreshMe()).then(after).catch((e) => (e.message === 'offline' || e.message === 'loading' || /popup/.test(e.message) ? explainTokenError(e) : toast(e.message, 6000)));
+    getToken(hint ? { hint } : {}).then(() => refreshMe()).then(after).catch((e) => (e.message === 'offline' || e.message === 'loading' || /popup/.test(e.message) ? explainTokenError(e) : toast(e.message, 6000)));
   });
 }
 function renderTodo() {
@@ -474,7 +474,7 @@ async function renderReport(arg) {
     records = me.records; person = me.person;
   } else {
     if (!adminState.person || adminState.person.person.email !== who) {
-      if (!tokenReady()) { signInPrompt(box, 'Sign in again with the JDSC account to continue.', () => renderReport(arg)); return; }
+      if (!tokenReady()) { signInPrompt(box, 'Sign in again with the JDSC account to continue.', () => renderReport(arg), CONFIG.jdsc); return; }
       box.innerHTML = '<p class="muted">Loading…</p>';
       try { adminState.person = await callApi('adminPerson', { email: who }); } catch (e) { box.innerHTML = `<div class="status warn"><span class="grow">${esc(e.message)}</span></div>`; return; }
     }
@@ -520,7 +520,7 @@ async function renderAdmin(email) {
     });
     return;
   }
-  if (!tokenReady()) { signInPrompt(box, 'Sign in again with the JDSC account to continue.', () => renderAdmin(email)); return; }
+  if (!tokenReady()) { signInPrompt(box, 'Sign in again with the JDSC account to continue.', () => renderAdmin(email), CONFIG.jdsc); return; }
   box.innerHTML = '<p class="muted">Loading…</p>';
   try {
     if (email) {
@@ -533,27 +533,37 @@ async function renderAdmin(email) {
     }
   } catch (e) { box.innerHTML = `<div class="status warn"><span class="grow">${esc(e.message)}</span></div>`; }
 }
-/* All active judges, trainees first, then by level (highest first), then name. */
+/* Active judges by level (highest first), then name. */
 const LEVEL_ORDER = ['excellent', 'advanced', 'intermediate', 'novice'];
 const levelRank = (l) => { const t = String(levelName(l) || '').toLowerCase(); const i = LEVEL_ORDER.findIndex((x) => t.startsWith(x)); return i < 0 ? 99 : i; };
 const byLevel = (a, b) => levelRank(a.level) - levelRank(b.level) || String(a.name).localeCompare(String(b.name));
 function adminListHtml(out) {
-  const active = out.people.filter((p) => p.status === 'Active');
-  const trainees = active.filter((p) => /trainee/i.test(p.level)).sort(byLevel);
-  const judges = active.filter((p) => !/trainee/i.test(p.level)).sort(byLevel);
-  const personRow = (p) => `<a class="entry linkrow" href="#admin/${encodeURIComponent(p.email)}"><div class="top"><span>${esc(p.name)}</span><span>${esc(levelName(p.level))}</span></div>
+  const active = out.people.filter((p) => p.status === 'Active').sort(byLevel);
+  const trainees = active.filter((p) => /trainee/i.test(p.level));
+  let only = false; try { only = localStorage.getItem('jl.adminTraineesOnly') === '1'; } catch (e) { /* storage off */ }
+  const personRow = (p) => `<a class="entry linkrow" href="#admin/${encodeURIComponent(p.email)}"${/trainee/i.test(p.level) ? ' data-trainee' : ''}><div class="top"><span>${esc(p.name)}</span><span>${esc(levelName(p.level))}</span></div>
     ${p.waiting ? `<div class="meta">${p.waiting} waiting for supervisor</div>` : ''}</a>`;
-  let html = `<p class="small muted">Signed in as ${esc((cachedMe() || {}).email || '')}. Changes are written straight into Judges and Trials (master).</p>`;
+  let html = `<p class="small muted">Signed in as ${esc((cachedMe() || {}).email || '')}. Changes are made in Judges and Trials (master).</p>`;
   if (out.waiting.length) html += `<h2>Waiting for supervisors</h2><div class="card">${out.waiting.map((r) => recordRow(r, `#review/${encodeURIComponent(r.id)}`, r.trainee)).join('')}</div>`;
-  html += `<h2>In training (${trainees.length})</h2><div class="card">${trainees.map(personRow).join('') || '<p class="small muted">No one is training at the moment.</p>'}</div>`;
-  html += `<h2>Judges (${judges.length})</h2><div class="card">${judges.map(personRow).join('')}</div>`;
+  html += `<h2>Judges</h2><div class="chips" role="group" aria-label="Show">` +
+    `<button type="button" class="chipbtn" data-judges="all" aria-pressed="${!only}">All judges (${active.length})</button>` +
+    `<button type="button" class="chipbtn" data-judges="trainees" aria-pressed="${only}">Trainees only (${trainees.length})</button></div>`;
+  html += `<div class="card${only ? ' trainees-only' : ''}" id="judgeList">${active.map(personRow).join('')}</div>`;
   const others = out.people.filter((p) => p.status !== 'Active').sort(byLevel);
   const otherRow = (p) => `<a class="entry linkrow" href="#admin/${encodeURIComponent(p.email)}"><div class="top"><span>${esc(p.name)}</span><span>${esc(levelName(p.level))}</span></div>
     <div class="meta"><span class="pill ${p.status === 'Resigned' ? 'bad' : 'warn'}">${esc(p.status)}</span></div></a>`;
   if (others.length) html += `<details class="card others"><summary>Inactive and resigned (${others.length})</summary>${others.map(otherRow).join('')}</details>`;
-  html += `<p class="small muted">The lists above show active judges. To change someone's level or status, edit their row in Judges and Trials (master): Level column for their level (for example "Nov Trainee" to start training); colour of their name for status (yellow = currently inactive, pink = resigned, no colour = active).</p>`;
+  html += `<p class="small muted">Active judges, highest level first. To change someone's level or status, edit their row in Judges and Trials (master): Level column for their level (for example "Nov Trainee" to start training); colour of their name for status (yellow = currently inactive, pink = resigned, green = approved for mentoring).</p>`;
   return html;
 }
+/* All judges / Trainees only, on the admin list. */
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-judges]'); if (!b) return;
+  const only = b.dataset.judges === 'trainees';
+  const list = $('#judgeList'); if (list) list.classList.toggle('trainees-only', only);
+  $$('[data-judges]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  try { localStorage.setItem('jl.adminTraineesOnly', only ? '1' : '0'); } catch (e) { /* storage off */ }
+});
 function adminPersonHtml(out) {
   const st = out.progress.stage;
   let html = `<div class="card"><b class="who-name">${esc(out.person.name)}</b><div class="who-status"><span class="who-level">${esc(levelName(out.person.level))}</span> <span class="pill ${out.person.status === 'Active' ? 'ok' : out.person.status === 'Resigned' ? 'bad' : 'warn'}">${esc(out.person.status)}</span></div></div>`;

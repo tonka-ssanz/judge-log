@@ -158,7 +158,7 @@ function isJdscAccount() {
 }
 function signOutGoogle() {
   if (accessToken && window.google) google.accounts.oauth2.revoke(accessToken, () => {});
-  accessToken = null; signedInEmail = ''; store.set('me', null);
+  clearToken(); signedInEmail = ''; store.set('me', null);
   const s = settings();
   // If the JDSC address was typed into My details, take it out again.
   if (isJdscEmail(s.email)) saveSettings({ email: '', consented2: false }); else saveSettings({ consented2: false });
@@ -258,6 +258,20 @@ function renderSettings() {
 /* ---------- Google sign-in and file picker ---------- */
 let signedInEmail = '';
 let accessToken = null, tokenExpiry = 0, tokenClient = null, pendingTokenResolve = null, pendingTokenReject = null;
+/* Keep the Google sign-in on this phone until it expires (about an hour), so reopening the app
+ * or reloading the page doesn't ask again. */
+function keepToken(token, expiry) {
+  accessToken = token; tokenExpiry = expiry;
+  try { localStorage.setItem('jl.tok', JSON.stringify({ t: token, x: expiry })); } catch (e) { /* storage off */ }
+}
+function clearToken() {
+  accessToken = null; tokenExpiry = 0;
+  try { localStorage.removeItem('jl.tok'); } catch (e) { /* storage off */ }
+}
+try {
+  const kept = JSON.parse(localStorage.getItem('jl.tok') || 'null');
+  if (kept && kept.t && kept.x > Date.now()) { accessToken = kept.t; tokenExpiry = kept.x; }
+} catch (e) { /* nothing kept */ }
 let gisReady = false, pickerReady = false;
 
 function loadScript(src) {
@@ -275,7 +289,7 @@ function loadGoogle() {
       callback: (resp) => {
         if (resp.error) { if (pendingTokenReject) pendingTokenReject(new Error(resp.error)); }
         else {
-          accessToken = resp.access_token; tokenExpiry = Date.now() + (resp.expires_in - 60) * 1000;
+          keepToken(resp.access_token, Date.now() + (resp.expires_in - 60) * 1000);
           saveSettings({ consented2: true });
           if (pendingTokenResolve) pendingTokenResolve(accessToken);
         }
@@ -293,12 +307,25 @@ function loadGoogle() {
 function getToken(opts = {}) {
   if (!opts.chooseAccount && accessToken && Date.now() < tokenExpiry) return Promise.resolve(accessToken);
   if (!navigator.onLine) return Promise.reject(new Error('offline'));
-  if (!gisReady) { loadGoogle(); return Promise.reject(new Error('loading')); }
-  return new Promise((resolve, reject) => {
+  const ask = () => new Promise((resolve, reject) => {
     pendingTokenResolve = resolve; pendingTokenReject = reject;
     const s = settings();
-    if (opts.chooseAccount) { accessToken = null; signedInEmail = ''; }
-    tokenClient.requestAccessToken({ prompt: opts.chooseAccount ? 'select_account' : (s.consented2 ? '' : 'consent'), login_hint: opts.hint || s.email || undefined });
+    if (opts.chooseAccount) { clearToken(); signedInEmail = ''; }
+    // On the JDSC account, always point Google at the JDSC Gmail (not the judge's own email in My details).
+    const hint = opts.hint || (isJdscAccount() ? CONFIG.jdsc : s.email) || undefined;
+    tokenClient.requestAccessToken({ prompt: opts.chooseAccount ? 'select_account' : (s.consented2 ? '' : 'consent'), login_hint: hint });
+  });
+  if (gisReady) return ask();
+  // Google's sign-in code is still loading: wait a moment (up to 3 seconds) instead of failing the first tap.
+  loadGoogle();
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const tick = () => {
+      if (gisReady) { ask().then(resolve, reject); return; }
+      if (Date.now() - start > 3000) { reject(new Error('loading')); return; }
+      setTimeout(tick, 100);
+    };
+    tick();
   });
 }
 function explainTokenError(e) {
@@ -344,7 +371,7 @@ async function api(path, opts = {}) {
   });
   if (res.ok) return res.json();
   let msg = ''; try { msg = (await res.json()).error.message; } catch (e) { /* ignore */ }
-  if (res.status === 401) { accessToken = null; throw new Error('Google sign-in expired. Tap Sync again.'); }
+  if (res.status === 401) { clearToken(); throw new Error('Google sign-in expired. Tap Sync again.'); }
   if (/has not been used|is disabled/i.test(msg)) throw new Error('The Google Sheets API is not switched on for the Judge Log yet. Please tell the JDSC.');
   if (res.status === 403 || res.status === 404) throw new Error('The Judge Log can\'t open that Judging Record. Choose it again under My details.');
   throw new Error('Google Sheets said: ' + (msg || res.status));
