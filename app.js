@@ -700,6 +700,37 @@ function clearForm(f) {
   if (f.date) f.date.value = today();
 }
 
+/* ---------- YouTube link helpers ----------
+ * "Open YouTube" opens whichever Google account is signed in on the device.
+ * On a phone, youtube.com opens the YouTube app (where Shorts are made: tap +).
+ * On a computer it goes straight to the upload page. */
+function cleanVideoLink(s) {
+  s = (s || '').trim();
+  try {
+    const u = new URL(s);
+    if (/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(u.hostname)) { u.searchParams.delete('si'); u.searchParams.delete('feature'); }
+    return u.toString();
+  } catch (_) { return s; }
+}
+function wireYouTube(f) {
+  const phone = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+  $('#openYouTube').href = phone ? 'https://www.youtube.com/' : 'https://www.youtube.com/upload';
+  const paste = $('#pasteVideo');
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    paste.hidden = false;
+    paste.addEventListener('click', async () => {
+      try {
+        const text = (await navigator.clipboard.readText()).trim();
+        if (!/^https?:\/\//.test(text)) { toast('No link copied yet. In YouTube tap Share → Copy link.'); return; }
+        f.video.value = cleanVideoLink(text);
+        f.video.dispatchEvent(new Event('input', { bubbles: true }));
+        toast('Link added.');
+      } catch (_) { toast('Couldn\'t paste. Press and hold in the box and choose Paste.'); }
+    });
+  }
+  f.video.addEventListener('change', () => { f.video.value = cleanVideoLink(f.video.value); });
+}
+
 /* ---------- wiring ---------- */
 document.addEventListener('DOMContentLoaded', () => {
   buildChips(); addVoice();
@@ -729,6 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('[data-view=record]').addEventListener('change', (e) => { if (e.target.name === 'recordTab') renderRecord(); });
 
   const f = logForm();
+  wireYouTube(f);
   f.addEventListener('change', (ev) => { if (ev.target.name === 'kind') showKind(); });
   f.addEventListener('input', () => { updateRate(); saveDraft(f); });
   f.addEventListener('change', () => saveDraft(f));

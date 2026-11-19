@@ -2,7 +2,7 @@
  * App files are served from the phone's cache and refreshed in the background
  * whenever there is signal. Bump VERSION when files are added or removed.
  * 'judge-log-ref' holds the latest Beyond the Sniff for Search (see reference-sync.js) and is kept between versions. */
-const VERSION = 'judge-log-v18';
+const VERSION = 'judge-log-v19';
 const APP_FILES = [
   './', 'index.html', 'report.html', 'reference.html', 'reference-data.js', 'reference-sync.js', 'privacy.html', 'styles.css', 'app.js', 'training-ui.js', 'forms.js', 'judges.js', 'training.js',
   'manifest.webmanifest', 'icon-192.png', 'icon-512.png',

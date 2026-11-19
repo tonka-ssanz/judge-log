@@ -118,7 +118,12 @@
     </div>
     <p class="small muted" id="rateNote"></p>
 
-    <label class="f" for="fVideo">Photo or video link<span class="hint">YouTube Short from your own channel. Always post as <b>Unlisted</b>.</span></label>
+    <label class="f" for="fVideo">Photo or video link<span class="hint">YouTube Short from your own channel.</span></label>
+    <div class="yt-row">
+      <a class="btn ghost small" id="openYouTube" href="https://www.youtube.com/" target="_blank" rel="noopener">▶ Open YouTube</a>
+      <button class="btn ghost small" type="button" id="pasteVideo" hidden>Paste link</button>
+    </div>
+    <p class="yt-note">Remember: set the video to <b>Unlisted</b>. Then tap Share → Copy link and paste it below.</p>
     <input type="url" id="fVideo" name="video" inputmode="url" placeholder="https://youtube.com/shorts/…">
 
     <div id="trainingExtras" hidden></div>
