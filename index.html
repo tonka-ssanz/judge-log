@@ -79,10 +79,7 @@
     <input type="hidden" name="entryId">
     <label class="f">What was this search?</label>
     <div class="chips" data-chips="kind" data-options="Judging|Stewarding with Intent|Probationary Judging|Mentoring" data-default="Judging"></div>
-    <div id="judgingOnly">
-      <label class="f">Which record?</label>
-      <div class="chips" data-chips="tab" data-options="SSANZ|Dogs NZ|Other" data-default="SSANZ"></div>
-    </div>
+    <div id="judgingOnly"></div>
     <div id="trainingOnly" hidden>
       <label class="f" for="fSup">Supervising judge</label>
       <input type="text" id="fSup" name="supervisor" list="supList" placeholder="Name of the judge you worked with">
@@ -151,12 +148,12 @@
   <div id="recordStatus"></div>
   <div class="stats" id="recordStats"></div>
   <div id="recordSplit"></div>
-  <div id="recordNote"></div>
-  <div class="card" id="recordList"></div>
   <div class="actions">
     <button class="btn ghost block" id="syncBtnRecord">Sync and refresh</button>
     <a class="btn ghost block" id="openSheet" target="_blank" rel="noopener" hidden>Open my Judging Record in Google Sheets</a>
   </div>
+  <div id="recordNote"></div>
+  <div class="card" id="recordList"></div>
 </section>
 
 <!-- TO DO (supervising judge) -->
@@ -169,10 +166,6 @@
   <div id="reviewBody"></div>
 </section>
 
-<!-- COMBINED REPORT (print or save as PDF) -->
-<section data-view="report" hidden>
-  <div id="reportBody"></div>
-</section>
 
 <!-- JDSC ADMIN -->
 <section data-view="admin" hidden>

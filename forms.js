@@ -39,8 +39,6 @@ const TRAINING_FORMS = {
     areas: [],
     traineeExtras: [
       ['placement', 'Inside or outside?', 'chips:Inside|Outside', 'For containers and vehicles'],
-      ['photoTaken', 'Photo taken', 'tick'],
-      ['videoTaken', 'Video taken', 'tick'],
       ['areaPrep', 'Search area review & preparation', 'text', 'Confirm size, address any potential hazards, mark boundaries, organise any "staging" or setting out of containers.'],
       ['environment', 'Environmental factors', 'text', 'The environmental factors you anticipate may influence odour movement and availability.'],
       ['searchDesign', 'Search design', 'text', 'What hide placement have you selected and why? Details of the vessel and number of tips used, with your reasoning. What is your yes zone?'],

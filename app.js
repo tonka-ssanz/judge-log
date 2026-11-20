@@ -12,7 +12,9 @@ const CONFIG = {
   // Web app address of the JDSC helper script (Deploy > Web app URL). Training records need it.
   apiUrl: 'https://script.google.com/macros/s/AKfycbywCXEqURDAO11M8BgMQ41gxIOAgjFokbFJItgp0q27XqFMa--86rNu3JR1hz3l_iIK-Q/exec',
   jdsc: 'ssanzjdsubcommittee@gmail.com',
-  tabs: ['SSANZ', 'Dogs NZ', 'Other', 'Training'],
+  // Judging entries go to the SSANZ tab. Training records go to the JDSC helper, which writes them into the
+  // locked SWI, Probationary and Mentoring tabs of the trainee's Judging Record.
+  tabs: ['SSANZ'],
   trainingTab: 'Training',
 };
 
@@ -127,7 +129,7 @@ function addVoice(root = document) {
 /* ---------- views ---------- */
 const TITLES = {
   home: 'SSANZ Judge Log', settings: 'My details', log: 'Log a search', record: 'My record', training: 'My training',
-  todo: 'To do', review: 'Training record', admin: 'JDSC admin', report: 'Training report',
+  todo: 'To do', review: 'Training record', admin: 'JDSC admin',
 };
 function route() {
   const [view, arg] = (location.hash.replace(/^#/, '') || 'home').split('/');
@@ -149,7 +151,6 @@ function route() {
   if (name === 'training') renderTraining();
   if (name === 'todo') renderTodo();
   if (name === 'review') renderReview(arg);
-  if (name === 'report') renderReport(arg);
   if (name === 'admin') renderAdmin(arg ? decodeURIComponent(arg) : '');
 }
 
@@ -398,18 +399,6 @@ async function checkRecord(fileId) {
 const textCell = (v) => { v = String(v || ''); return /^[=+\-@]/.test(v) ? "'" + v : v; };
 const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 
-const TRAINING_HEADER = ['Date', 'Host Organisation', 'Trial Location', 'Who Set the Hide(s)?', 'Level', 'Element', 'Teams',
-  'Passes *', 'Pass Rate', 'Photo/Video Link', 'Reflections', 'Training Type', 'Supervising Judge'];
-async function addTrainingTab(fileId) {
-  const res = await api(`${fileId}:batchUpdate`, { method: 'POST', body: { requests: [{ addSheet: { properties: {
-    title: CONFIG.trainingTab, gridProperties: { rowCount: 200, columnCount: 13, frozenRowCount: 1 } } } }] } });
-  await api(`${fileId}/values/${q(CONFIG.trainingTab)}!A1:M1?valueInputOption=RAW`, { method: 'PUT', body: { values: [TRAINING_HEADER] } });
-  const sheetId = res.replies[0].addSheet.properties.sheetId;
-  await api(`${fileId}:batchUpdate`, { method: 'POST', body: { requests: [{ repeatCell: {
-    range: { sheetId, startRowIndex: 0, endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: 'userEnteredFormat.textFormat.bold' } }] } });
-  return res.replies[0].addSheet.properties;
-}
-
 async function syncTab(fileId, tab, list, sheetProps) {
   const training = tab === CONFIG.trainingTab;
   const rowCount = sheetProps.gridProperties.rowCount;
@@ -479,12 +468,8 @@ function syncNow() {
         const meta = await api(`${s.fileId}?fields=sheets.properties(sheetId,title,gridProperties)`);
         const props = {}; meta.sheets.forEach((sh) => { props[sh.properties.title] = sh.properties; });
         const tabs = CONFIG.tabs.filter((t) => props[t]);
-        const pending = entries().filter((e) => e.status !== 'synced');
+        const pending = entries().filter((e) => e.status !== 'synced' && !TRAINING_FORMS[e.kind]);
         let written = 0;
-        if (pending.some((e) => e.tab === CONFIG.trainingTab) && !props[CONFIG.trainingTab]) {
-          props[CONFIG.trainingTab] = await addTrainingTab(s.fileId);
-          tabs.push(CONFIG.trainingTab);
-        }
         for (const tab of new Set(pending.map((e) => e.tab))) {
           if (!props[tab]) { toast(`Your Judging Record has no "${tab}" tab — those entries are still on this phone.`, 6000); continue; }
           const done = await syncTab(s.fileId, tab, pending.filter((e) => e.tab === tab), props[tab]);
@@ -496,6 +481,8 @@ function syncNow() {
         saveSettings({ lastSync: Date.now(), tabs });
         if (written) notes.push(`${written} ${written === 1 ? 'entry' : 'entries'} added to your Judging Record`);
       }
+      // Training records: once the helper has them (and they haven't been changed since), they're done on this phone.
+      if (CONFIG.apiUrl) saveEntries(entries().map((e) => (TRAINING_FORMS[e.kind] && e.sent && !e.changed ? Object.assign(e, { status: 'synced' }) : e)));
       // Keep the phone tidy: forget entries once they're in the sheet (and, for training, sent to the supervisor).
       saveEntries(entries().filter((e) => e.status !== 'synced' || (TRAINING_FORMS[e.kind] && CONFIG.apiUrl && !e.sent)));
       if (CONFIG.apiUrl) await refreshMe();
@@ -570,6 +557,8 @@ function showKind(values) {
   $('#locLabel').textContent = training ? 'Venue' : 'Trial location';
   $('#teamsLabel').innerHTML = training ? 'Teams entered (E)' : 'Teams<span class="hint">Number of teams judged</span>';
   $('#passesLabel').innerHTML = training ? 'Sourced in time (S)<span class="hint">Teams that sourced the hide within the time allowed</span>' : 'Passes<span class="hint">Correct calls on all hides in time</span>';
+  // SWI trainees never set the hides, so the SWI form doesn't ask for Sourced in time.
+  $('#fPasses').parentElement.hidden = !!form && form.code === 'SWI';
   $('#reflLabel').textContent = training ? 'Trainee learning / reflections' : 'Reflections';
   $('#fSup').previousElementSibling.textContent = form ? form.supervisorTitle : 'Supervising judge';
   renderSetter();
@@ -631,9 +620,9 @@ function readLogForm() {
   const f = logForm();
   const kind = chipValue(f, 'kind') || 'Judging';
   return {
-    id: f.entryId.value || uid(), kind, tab: kind === 'Judging' ? (chipValue(f, 'tab') || 'SSANZ') : CONFIG.trainingTab,
+    id: f.entryId.value || uid(), kind, tab: kind === 'Judging' ? 'SSANZ' : CONFIG.trainingTab,
     supervisor: kind === 'Judging' ? '' : f.supervisor.value.trim(), extras: kind === 'Judging' ? {} : readExtras(), date: f.date.value, host: f.host.value.trim(), location: f.location.value.trim(),
-    setter: readSetter(f, kind), level: chipValue(f, 'level'), element: elementValue(f), teams: f.teams.value, passes: f.passes.value,
+    setter: readSetter(f, kind), level: chipValue(f, 'level'), element: elementValue(f), teams: f.teams.value, passes: kind === 'Stewarding with Intent' ? '' : f.passes.value,
     video: f.video.value.trim(), reflections: readReflections(f),
   };
 }

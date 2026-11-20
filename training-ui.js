@@ -39,7 +39,7 @@ async function sendTrainingRecords() {
     const record = Object.assign({}, e.extras || {}, {
       id: e.id, kind: e.kind, date: e.date, host: e.host, location: e.location, level: e.level, element: e.element,
       supervisor: e.supervisor, setter: e.setter, teams: e.teams, passes: e.passes, video: e.video, reflections: e.reflections,
-      membership: s.membership || '',
+      membership: s.membership || '', recordFile: s.fileId || '',
     });
     await callApi('submit', { record });
     const list = entries(); const x = list.find((y) => y.id === e.id);
@@ -256,7 +256,6 @@ async function renderTraining() {
   if (recs.length) {
     html += `<h2>My training records</h2><div class="card">` + recs.map((r) => recordRow(r, r.local ? `#log/${encodeURIComponent(r.id)}` : `#review/${encodeURIComponent(r.id)}`)).join('') + `</div>`;
   }
-  if (me && me.records) html += reportsHtml(me.records, 'me');
   box.innerHTML = html;
   // Saved before modules were added (v24): fetch fresh data once, quietly, then redraw.
   if (me && !('modules' in me) && !renderTraining.refetched && navigator.onLine && tokenReady()) {
@@ -456,68 +455,6 @@ function reviewHtml(rec, canComplete, printing) {
   return html;
 }
 
-/* ---------- combined reports: every record for one trainee and stage ---------- */
-function bundleKey(r) {
-  if (r.kind === 'Stewarding with Intent') return `SWI|${r.level}`;
-  const lvl = ['Advanced', 'Excellent'].includes(r.level) ? 'Advanced/Excellent' : r.level;
-  return `Second|${lvl}`;
-}
-function bundles(records) {
-  const order = ['SWI|Novice', 'Second|Novice', 'SWI|Intermediate', 'Second|Intermediate', 'Second|Advanced/Excellent'];
-  const map = {};
-  (records || []).filter((r) => r.status !== 'Withdrawn').forEach((r) => { (map[bundleKey(r)] = map[bundleKey(r)] || []).push(r); });
-  return Object.keys(map).sort((a, b) => order.indexOf(a) - order.indexOf(b)).map((key) => {
-    const recs = map[key].slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const [k, lvl] = key.split('|');
-    const kinds = new Set(recs.map((r) => r.kind));
-    const what = k === 'SWI' ? 'Stewarding with Intent' : kinds.size > 1 ? 'Probationary and Mentoring' : [...kinds][0];
-    return { key, title: `${what} – ${lvl}`, records: recs, done: recs.filter((r) => r.status === 'Complete').length };
-  });
-}
-function reportsHtml(records, who) {
-  const list = bundles(records);
-  if (!list.length) return '';
-  return `<h2>Reports</h2><div class="card">` + list.map((b) => `<a class="entry linkrow" href="#report/${encodeURIComponent(who + '|' + b.key)}">
-    <div class="top"><span>${esc(b.title)}</span><span>›</span></div><div class="meta">${b.records.length} record${b.records.length > 1 ? 's' : ''}, ${b.done} signed off · print or save as one document</div></a>`).join('') + `</div>`;
-}
-async function renderReport(arg) {
-  const box = $('#reportBody');
-  const [who, ...rest] = decodeURIComponent(arg || '').split('|');
-  const key = rest.join('|');
-  let records, person;
-  if (who === 'me') {
-    const me = cachedMe();
-    if (!me) { signInPrompt(box, 'Sign in to see your training reports.', () => renderReport(arg)); return; }
-    records = me.records; person = me.person;
-  } else {
-    if (!adminState.person || adminState.person.person.email !== who) {
-      if (!tokenReady()) { signInPrompt(box, 'Sign in again with the JDSC account to continue.', () => renderReport(arg), CONFIG.jdsc); return; }
-      box.innerHTML = '<p class="muted">Loading…</p>';
-      try { adminState.person = await callApi('adminPerson', { email: who }); } catch (e) { box.innerHTML = `<div class="status warn"><span class="grow">${esc(e.message)}</span></div>`; return; }
-    }
-    records = adminState.person.records; person = adminState.person.person;
-  }
-  const b = bundles(records).find((x) => x.key === key);
-  if (!b) { box.innerHTML = '<div class="card"><p>No training records for that stage.</p></div>'; return; }
-  const first = b.records[0], last = b.records[b.records.length - 1];
-  let html = `<div class="card report-cover"><div class="small muted">Scent Sport Association of New Zealand · Judges Development Sub-Committee</div>
-    <h2 style="margin:6px 0 4px">${esc(b.title)}</h2><b class="who-name">${esc(person ? person.name : '')}</b>
-    <p class="small">${b.records.length} record${b.records.length > 1 ? 's' : ''}, ${b.done} signed off · ${esc(nzDate(first.date))} to ${esc(nzDate(last.date))}</p>
-    <table class="summary">${b.records.map((r) => `<tr><td>${esc(nzDate(r.date))}</td><td>${esc(r.kind === 'Stewarding with Intent' ? 'SWI' : r.kind === 'Mentoring' ? 'Mentoring' : 'Probationary')} · ${esc(r.element)}</td><td>${esc(r.host || '')}</td><td>${esc(r.supervisor || '')}</td><td>${esc(r.status)}</td></tr>`).join('')}</table>
-    <div class="actions no-print"><button class="btn block" data-print>Print or save as PDF</button>` +
-    (who !== 'me' ? `<button class="btn ghost block" data-drive-pdf>Save PDF to the trainee's Drive folder</button>` : '') + `</div></div>`;
-  html += b.records.map((r) => `<div class="report-rec">${reviewHtml(r, false, true)}</div>`).join('');
-  box.innerHTML = html;
-  $('[data-print]', box).addEventListener('click', () => window.print());
-  const d = $('[data-drive-pdf]', box);
-  if (d) d.addEventListener('click', () => {
-    d.disabled = true; d.textContent = 'Saving…';
-    callApi('adminBundlePdf', { email: who, ids: b.records.map((r) => r.id), title: b.title })
-      .then((out) => { d.outerHTML = `<a class="btn ghost block" href="${esc(out.url)}" target="_blank" rel="noopener">Open the PDF in Drive</a>`; toast('Saved in the trainee\'s folder in the JDSC Drive.'); })
-      .catch((e) => { toast(e.message, 6000); d.disabled = false; d.textContent = 'Save PDF to the trainee\'s Drive folder'; });
-  });
-}
-
 /* ---------- JDSC admin ---------- */
 const adminState = { people: null, waiting: null, person: null };
 const LEVEL_NAMES = { 'Nov Trainee': 'Novice Trainee', 'Int Trainee': 'Intermediate Trainee', 'Adv/Exc Trainee': 'Advanced/Excellent Trainee' };
@@ -619,7 +556,6 @@ function adminPersonHtml(out) {
   if (out.masterUrl) html += `<div class="actions"><a class="btn block" target="_blank" rel="noopener" href="${esc(out.masterUrl)}">Open their row in the master sheet</a></div>
     <p class="small muted">Make all changes in Judges and Trials (master): "-" = not required, "Waived" = waived, a date in "Date SWI's Approved" opens the next stage, a date in "Date Promoted" when they pass. Then change their Level.</p>`;
   html += appointmentsHtml(out.person && out.appointments ? { appointments: out.appointments } : null, true);
-  html += reportsHtml(out.records, out.person.email);
   if (out.records.length) html += `<h2>Training records</h2><div class="card">${out.records.map((r) => recordRow(r, `#review/${encodeURIComponent(r.id)}`)).join('')}</div>`;
   html += `<div class="actions"><a class="btn ghost block" href="#admin">Back to all judges</a></div>`;
   return html;
