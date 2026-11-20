@@ -341,10 +341,19 @@ function signInPrompt(box, why, after, hint) {
     }).catch((e) => { reset(); (e.message === 'offline' || e.message === 'loading' || /popup/.test(e.message) ? explainTokenError(e) : toast(e.message, 6000)); });
   });
 }
+/* Shown once on the To do page right after a supervisor signs a record. */
+let todoThanks = null;
+function thanksHtml(t, me) {
+  const first = (me && me.person && me.person.name ? me.person.name : '').split(' ')[0];
+  const trainee = String(t.trainee || '').split(' ')[0] || 'the trainee';
+  return `<div class="card thanks"><b class="big">Done – thank you${first ? ', ' + esc(first) : ''}!</b>
+    <p>Your comments have been sent to ${esc(trainee)}. Thank you for your time and for sharing your experience with our trainee judges.</p></div>`;
+}
 function renderTodo() {
   const box = $('#todoBody'); const me = cachedMe();
   if (!me) { signInPrompt(box, 'Sign in to see training records waiting for your comments.', renderTodo); return; }
   let html = '';
+  if (todoThanks) { html += thanksHtml(todoThanks, me); todoThanks = null; }
   html += me.todo.length
     ? `<p class="muted small">Trainees who named you as their coaching or mentoring judge. Open one to read their part and add your comments.</p><div class="card">${me.todo.map((r) => recordRow(r, `#review/${encodeURIComponent(r.id)}`, r.trainee)).join('')}</div>`
     : `<div class="card"><p>Nothing waiting for you. 🎉</p></div>`;
@@ -395,7 +404,7 @@ async function renderReview(id) {
       if (!confirm(`Complete and sign this record for ${rec.trainee}?\n\nYour name and Google account stand in for your signature. It can't be changed afterwards.`)) return;
       const btn = $('button[type=submit]', form); btn.disabled = true; btn.textContent = 'Saving…';
       callApi('complete', { id: rec.id, supervisorPart: part })
-        .then(() => { localStorage.removeItem('jl.' + key); toast(`Done. ${rec.trainee} has been emailed and their record updated.`, 5000); return refreshMe(); })
+        .then(() => { localStorage.removeItem('jl.' + key); todoThanks = { trainee: rec.trainee, kind: rec.kind }; return refreshMe().catch(() => {}); })
         .then(() => { location.hash = 'todo'; })
         .catch((e) => { toast(e.message, 6000); btn.disabled = false; btn.textContent = 'Complete and sign'; });
     });
@@ -426,10 +435,10 @@ function reviewHtml(rec, canComplete, printing) {
     html += `<div class="card"><h3>${esc(formDef.supervisorTitle)}</h3>`;
     if (formDef.areas.length) {
       let group = '';
-      html += formDef.areas.map(([g, title], i) => {
+      html += formDef.areas.map(([g, title, desc], i) => {
         const a = (s.areas || [])[i] || {};
         const head = g !== group ? `<h4>${esc(g)}</h4>` : ''; group = g;
-        return `${head}<div class="area-done"><span class="tickmark">${a.ticked ? '✓' : '–'}</span><div><b>${esc(title)}</b>${a.note ? `<div class="small">${esc(a.note)}</div>` : ''}</div></div>`;
+        return `${head}<div class="area-done"><span class="tickmark">${a.ticked ? '✓' : '–'}</span><div><b>${esc(title)}</b>${desc ? `<div class="small muted">${esc(desc)}</div>` : ''}${a.note ? `<div class="small"><b>Comment:</b> ${esc(a.note)}</div>` : ''}</div></div>`;
       }).join('');
     }
     html += `<h4>Comments</h4><p class="refl">${esc(s.comments || '')}</p>
