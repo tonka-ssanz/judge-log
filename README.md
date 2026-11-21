@@ -5,6 +5,7 @@ Phone-first web app for SSANZ judges, hosted at https://tonka-ssanz.github.io/ju
 ## What's in it
 - `index.html`, `app.js`, `styles.css`: the app (log appointments, My record, Stewarding with Intent, Probationary coaching, settings)
 - `report.html`: Notify SSANZ (two branches: dog fouled during search, or something else). The email wording is read by the "Judge Concerns Log" Apps Script in the JDSC Gmail; if labels change here, change REPORT_LABELS there too.
+- `trials.js`: SSANZ trial calendar (dates, host, venue) from the yearly Trials tabs of Judges and Trials (master). Log a search uses it to suggest the trial on the day (any day of a multi-day trial). Rebuild it when trials are added or dates change.
 - `sw.js` + `manifest.webmanifest` + icons: offline use and "Add to Home Screen". Bump `VERSION` in sw.js when files are added or removed.
 - `privacy.html`: privacy policy
 

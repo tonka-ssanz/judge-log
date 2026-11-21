@@ -529,7 +529,7 @@ function openLogForm(id) {
   allowedKinds().then((kinds) => {
     const keep = e ? e.kind : null;
     $$('[data-chips=kind] input', f).forEach((inp) => {
-      const show = inp.value === 'Judging' || kinds.includes(inp.value) || inp.value === keep;
+      const show = inp.value === 'Judging' || kinds.includes(inp.value) || inp.value === keep || inp.checked;
       inp.hidden = !show; const lab = f.querySelector(`label[for="${inp.id}"]`); if (lab) lab.hidden = !show;
     });
     if (newTraining && !chipValue(f, 'kind') || (newTraining && chipValue(f, 'kind') === 'Judging' && kinds.length)) { setChip(f, 'kind', kinds[0] || 'Judging'); showKind(); }
@@ -549,6 +549,90 @@ function openLogForm(id) {
   setChip(f, 'level', v.level || ''); setElement(f, v.element || '');
   $('#deleteEntry').hidden = !e || e.sent;
   showKind(v.extras || {}); updateRate();
+  // New search with no trial filled in yet: suggest the trial on today's date.
+  f.dataset.guessHost = '';
+  if (!e && !apptMatch && !v.host) {
+    const { on } = guessTrial(f.date.value);
+    if (on.length) applyTrial(f, on[0]);
+  }
+  renderTrialGuess(f);
+}
+
+/* ---------- trial suggestion ----------
+ * Uses the SSANZ trial calendar (trials.js). Any day of a 2 or 3 day trial counts.
+ * A trial where the trainee has an approved appointment comes first, and fills in the
+ * search type, level and supervising judge too. The element is always left for the judge to tap. */
+const normHost = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const trialList = () => (typeof TRIALS !== 'undefined' ? TRIALS : []);
+function trialDates(t) {
+  const fmt = (iso, opts) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-NZ', Object.assign({ timeZone: 'UTC' }, opts));
+  if (t.start === t.end) return fmt(t.start, { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${fmt(t.start, { day: 'numeric' })}–${fmt(t.end, { day: 'numeric', month: 'short' })}`;
+}
+function apptAt(t) {
+  const list = ((cachedMe() || {}).appointments) || [];
+  const here = list.filter((a) => normHost(a.host) === normHost(t.host) && a.date >= addDays(t.start, -1) && a.date <= t.end);
+  return here.find((a) => a.status !== 'Signed off' && a.status !== 'Completed') || here[0] || null;
+}
+function guessTrial(iso) {
+  iso = iso || today();
+  const on = trialList().filter((t) => t.start <= iso && iso <= t.end);
+  on.sort((a, b) => (apptAt(b) ? 1 : 0) - (apptAt(a) ? 1 : 0));
+  // Nothing on that date: offer trials that finished in the last few days (a late entry).
+  const recent = on.length ? [] : trialList().filter((t) => t.end < iso && t.end >= addDays(iso, -3)).reverse();
+  return { on, recent };
+}
+function applyTrial(f, t, setDate) {
+  f.host.value = t.host; f.location.value = t.venue || '';
+  f.dataset.guessHost = t.host;
+  if (setDate) f.date.value = t.end;
+  const a = apptAt(t);
+  if (a && !f.entryId.value) {
+    setChip(f, 'kind', a.kind); showKind();
+    if (a.supervisor) f.supervisor.value = a.supervisor;
+    if (a.level) setChip(f, 'level', a.level);
+  }
+}
+function renderTrialGuess(f) {
+  const box = $('#trialGuess'); if (!box) return;
+  const { on, recent } = guessTrial(f.date.value);
+  const cur = on.find((t) => normHost(t.host) === normHost(f.host.value));
+  const btn = (t, i, label) => `<button type="button" class="linkbtn" data-trial="${i}">${esc(label || [t.host, t.venue, trialDates(t)].filter(Boolean).join(', '))}</button>`;
+  const idx = (t) => trialList().indexOf(t);
+  let html = '';
+  if (cur) {
+    const a = apptAt(cur);
+    html = `<i>Suggested from the SSANZ trial list: ${esc(cur.host)}, ${esc(trialDates(cur))}.</i>` +
+      (a ? ` You're listed for ${esc(a.kind)}${a.supervisor ? ' with ' + esc(a.supervisor) : ''}.` : '');
+    const others = on.filter((t) => t !== cur);
+    if (others.length) html += `<br>Or: ${others.map((t) => btn(t, idx(t))).join(' · ')}`;
+  } else if (on.length && !f.host.value.trim()) {
+    html = `Trials on this date: ${on.map((t) => btn(t, idx(t))).join(' · ')}`;
+  } else if (recent.length && !f.host.value.trim()) {
+    html = `Logging a recent trial? ${recent.map((t) => btn(t, idx(t))).join(' · ')}`;
+  }
+  box.innerHTML = html; box.hidden = !html;
+}
+function wireTrialGuess(f) {
+  $('#trialGuess').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-trial]'); if (!b) return;
+    const t = trialList()[+b.dataset.trial]; if (!t) return;
+    const iso = f.date.value;
+    applyTrial(f, t, !(t.start <= iso && iso <= t.end));
+    renderTrialGuess(f); saveDraft(f);
+  });
+  // A different date: swap the suggestion, unless the judge has typed their own host.
+  f.date.addEventListener('change', () => {
+    const typed = f.host.value.trim() && f.host.value !== f.dataset.guessHost;
+    if (!typed && !f.entryId.value) {
+      const { on } = guessTrial(f.date.value);
+      if (on.length) applyTrial(f, on[0]);
+      else if (f.dataset.guessHost) { f.host.value = ''; f.location.value = ''; f.dataset.guessHost = ''; }
+    }
+    renderTrialGuess(f);
+  });
+  f.host.addEventListener('input', () => renderTrialGuess(f));
 }
 function showKind(values) {
   const f = logForm(); const kind = chipValue(f, 'kind') || 'Judging'; const form = TRAINING_FORMS[kind];
@@ -860,7 +944,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#syncBtnRecord').addEventListener('click', syncNow);
 
   const f = logForm();
-  wireYouTube(f); wireSetter(f);
+  wireYouTube(f); wireSetter(f); wireTrialGuess(f);
   f.addEventListener('change', (ev) => { if (ev.target.name === 'kind') showKind(); });
   f.addEventListener('input', () => { updateRate(); saveDraft(f); });
   f.addEventListener('change', () => saveDraft(f));
