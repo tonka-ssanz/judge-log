@@ -425,7 +425,7 @@ function reviewHtml(rec, canComplete, printing) {
     <h3>Trainee</h3>` +
     row('Name', rec.trainee) + row('SSANZ membership no.', t.membership) + row('Date', nzDate(rec.date)) + row('Host organisation', rec.host) + row('Venue', rec.venue) +
     row('Level', rec.level) + row('Element', [t.element || rec.element, t.placement ? `(${t.placement})` : ''].join(' ').trim()) + row('Who set the hide(s)', t.setter) +
-    row('Teams entered (E)', t.teams) + row('Sourced in time (S)', t.passes) + row('Major faults awarded', t.majorFaults) + row('Minor faults awarded', t.minorFaults) +
+    row('Teams judged', t.teams) + row('Sourced in time (S)', t.passes) + row('Major faults awarded', t.majorFaults) + row('Minor faults awarded', t.minorFaults) +
     row('Photo taken', t.photoTaken) + row('Video taken', t.videoTaken) +
     (t.video ? `<div class="kv"><span>Photo/video</span><div><a href="${esc(t.video)}" target="_blank" rel="noopener">Open link</a></div></div>` : '') +
     row('Search area review & preparation', t.areaPrep) + row('Environmental factors', t.environment) + row('Search design', t.searchDesign) +

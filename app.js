@@ -555,7 +555,7 @@ function showKind(values) {
   const training = !!form;
   $('#judgingOnly').hidden = training; $('#trainingOnly').hidden = !training;
   $('#locLabel').textContent = training ? 'Venue' : 'Trial location';
-  $('#teamsLabel').innerHTML = training ? 'Teams entered (E)' : 'Teams<span class="hint">Number of teams judged</span>';
+  $('#teamsLabel').innerHTML = 'Teams judged<span class="hint">Number of teams judged</span>';
   $('#passesLabel').innerHTML = training ? 'Sourced in time (S)<span class="hint">Teams that sourced the hide within the time allowed</span>' : 'Passes<span class="hint">Correct calls on all hides in time</span>';
   // SWI trainees never set the hides, so the SWI form doesn't ask for Sourced in time.
   $('#fPasses').parentElement.hidden = !!form && form.code === 'SWI';
@@ -875,7 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (chipValue(f, 'setterQuick') === 'Someone else' && e.setter.toLowerCase() === 'me') { toast('Add the name of who set the hide(s).'); f.setter.focus(); return; }
-    if (e.teams === '' || +e.teams < 1) { toast('Add the number of teams.'); f.teams.focus(); return; }
+    if (e.teams === '' || +e.teams < 1) { toast('Add the number of teams judged.'); f.teams.focus(); return; }
     if (e.kind === 'Judging' && e.passes === '') { toast('Add the number of passes.'); f.passes.focus(); return; }
     if (e.kind !== 'Judging' && e.setter === 'Me' && e.passes === '') { toast('You set the hides, so add Sourced in time (S).'); f.passes.focus(); return; }
     if (e.passes !== '' && +e.passes > +e.teams) { toast('Passes can\'t be more than teams.'); return; }
