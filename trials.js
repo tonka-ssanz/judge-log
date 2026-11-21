@@ -1,7 +1,6 @@
-/* SSANZ trial calendar for the Judge Log, as at 21 Nov 2026.
- * Built from Judges and Trials (master), yearly Trials tabs (rows 1–3: date, host, venue).
- * Used to suggest the trial when a judge logs a search. Dates are the first and last day of each trial.
- * Trials with no exact date yet (e.g. "Dec 2026") are left out until the date is filled in. */
+/* Starting copy of the SSANZ trial calendar, as at 21 Nov 2026. No need to keep this up to date:
+ * the app reads the live list from Judges and Trials (master) through the JDSC helper (?action=trials)
+ * whenever there's signal and keeps it on the phone. This copy is only used until that first happens. */
 const TRIALS_AS_AT = "21 Nov 2026";
 const TRIALS = [
   { start: "2026-01-03", end: "2026-01-04", host: "K9 Scentcraft", venue: "Globe Theatre, Palmerston North" },

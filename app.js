@@ -220,6 +220,7 @@ async function renderWho() {
 
 function renderHome() {
   const s = settings(); const n = pendingCount();
+  refreshTrials(60 * 60 * 1000);   // keep the trial list on the phone up to date while there's signal
   const jdsc = isJdscAccount();
   ['#logTile', '#recordTile', '#concernTile', '#syncBtnHome', '#detailsBtnHome'].forEach((id) => { $(id).hidden = jdsc; });
   $('#jdscSignOutHome').hidden = !jdsc;
@@ -551,11 +552,26 @@ function openLogForm(id) {
   showKind(v.extras || {}); updateRate();
   // New search with no trial filled in yet: suggest the trial on today's date.
   f.dataset.guessHost = '';
-  if (!e && !apptMatch && !v.host) {
-    const { on } = guessTrial(f.date.value);
-    if (on.length) applyTrial(f, on[0]);
-  }
+  if (!e && !apptMatch && !v.host) autoTrial(f);
   renderTrialGuess(f);
+  // Check for trials added or changed in the master sheet since this phone last looked.
+  refreshTrials(10 * 60 * 1000).then((changed) => {
+    if (!changed || location.hash.indexOf('#log') !== 0 || f.entryId.value) return;
+    const typed = f.host.value.trim() && f.host.value !== f.dataset.guessHost;
+    if (!typed) autoTrial(f);
+    renderTrialGuess(f);
+  });
+}
+/* Fill in the trial for the date on the form: the same host and venue as the last search at this trial,
+ * otherwise the trial on that date in the SSANZ trial list. */
+function autoTrial(f) {
+  const iso = f.date.value || today();
+  const { on } = guessTrial(iso);
+  const last = lastTrialFor(iso);
+  if (on.length) applyTrial(f, on[0]);
+  if (last) { f.host.value = last.host; f.location.value = last.location || ''; f.dataset.guessHost = last.host; f.dataset.sameAsLast = '1'; }
+  else f.dataset.sameAsLast = '';
+  return !!(on.length || last);
 }
 
 /* ---------- trial suggestion ----------
@@ -564,7 +580,31 @@ function openLogForm(id) {
  * search type, level and supervising judge too. The element is always left for the judge to tap. */
 const normHost = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-const trialList = () => (typeof TRIALS !== 'undefined' ? TRIALS : []);
+/* Live trial list from the JDSC helper (read straight from the master sheet's Trials tabs), kept on the phone for
+ * when there's no signal. trials.js is only a starting copy for a phone that has never been online with the app. */
+const trialList = () => { const live = store.get('trials', null); return live && live.list ? live.list : (typeof TRIALS !== 'undefined' ? TRIALS : []); };
+let trialsFetch = null;
+function refreshTrials(maxAgeMs) {
+  const live = store.get('trials', null);
+  if (live && Date.now() - live.at < (maxAgeMs || 0)) return Promise.resolve(false);
+  if (!CONFIG.apiUrl || navigator.onLine === false) return Promise.resolve(false);
+  if (trialsFetch) return trialsFetch;
+  trialsFetch = fetch(CONFIG.apiUrl + '?action=trials').then((r) => r.json()).then((j) => {
+    if (!j.ok || !Array.isArray(j.trials)) return false;
+    const changed = JSON.stringify(j.trials) !== JSON.stringify(live && live.list);
+    store.set('trials', { at: Date.now(), list: j.trials });
+    return changed;
+  }).catch(() => false).finally(() => { trialsFetch = null; });
+  return trialsFetch;
+}
+/* The last search saved, so later searches at the same trial (same weekend) get the same host and venue. */
+function lastTrialFor(iso) {
+  const last = settings().lastTrial;
+  if (!last || !last.host || !last.date || last.date > iso) return null;
+  const t = trialList().find((x) => x.start <= iso && iso <= x.end);
+  if (t) return t.start <= last.date ? last : null;   // same trial
+  return last.date >= addDays(iso, -2) ? last : null;   // not in the trial list: same weekend
+}
 function trialDates(t) {
   const fmt = (iso, opts) => new Date(iso + 'T12:00:00Z').toLocaleDateString('en-NZ', Object.assign({ timeZone: 'UTC' }, opts));
   if (t.start === t.end) return fmt(t.start, { weekday: 'short', day: 'numeric', month: 'short' });
@@ -601,7 +641,14 @@ function renderTrialGuess(f) {
   const btn = (t, i, label) => `<button type="button" class="linkbtn" data-trial="${i}">${esc(label || [t.host, t.venue, trialDates(t)].filter(Boolean).join(', '))}</button>`;
   const idx = (t) => trialList().indexOf(t);
   let html = '';
-  if (cur) {
+  const last = f.dataset.sameAsLast && lastTrialFor(f.date.value);
+  if (last && normHost(last.host) === normHost(f.host.value)) {
+    const a = cur && apptAt(cur);
+    html = `<i>Same as your last search (${esc(nzDate(last.date))}).</i>` +
+      (a ? ` You're listed for ${esc(a.kind)}${a.supervisor ? ' with ' + esc(a.supervisor) : ''}.` : '');
+    const others = on.filter((t) => t !== cur);
+    if (others.length) html += `<br>Or: ${others.map((t) => btn(t, idx(t))).join(' · ')}`;
+  } else if (cur) {
     const a = apptAt(cur);
     html = `<i>Suggested from the SSANZ trial list: ${esc(cur.host)}, ${esc(trialDates(cur))}.</i>` +
       (a ? ` You're listed for ${esc(a.kind)}${a.supervisor ? ' with ' + esc(a.supervisor) : ''}.` : '');
@@ -619,16 +666,14 @@ function wireTrialGuess(f) {
     const b = ev.target.closest('[data-trial]'); if (!b) return;
     const t = trialList()[+b.dataset.trial]; if (!t) return;
     const iso = f.date.value;
-    applyTrial(f, t, !(t.start <= iso && iso <= t.end));
+    applyTrial(f, t, !(t.start <= iso && iso <= t.end)); f.dataset.sameAsLast = '';
     renderTrialGuess(f); saveDraft(f);
   });
   // A different date: swap the suggestion, unless the judge has typed their own host.
   f.date.addEventListener('change', () => {
     const typed = f.host.value.trim() && f.host.value !== f.dataset.guessHost;
     if (!typed && !f.entryId.value) {
-      const { on } = guessTrial(f.date.value);
-      if (on.length) applyTrial(f, on[0]);
-      else if (f.dataset.guessHost) { f.host.value = ''; f.location.value = ''; f.dataset.guessHost = ''; }
+      if (!autoTrial(f) && f.dataset.guessHost) { f.host.value = ''; f.location.value = ''; f.dataset.guessHost = ''; }
     }
     renderTrialGuess(f);
   });
@@ -978,6 +1023,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (i >= 0) list[i] = e; else list.push(e);
     if (!saveEntries(list)) return;
     localStorage.removeItem('jl.draft.log');
+    const lt = settings().lastTrial;
+    if (e.host && (!lt || e.date >= lt.date)) saveSettings({ lastTrial: { date: e.date, host: e.host, location: e.location } });
     if (e.kind === 'Judging') saveSettings({ lastTab: e.tab });
     if (form) toast(navigator.onLine ? `Saved. Tap Sync now to send it to ${e.supervisor}.` : `Saved on this phone. Sync when you have signal to send it to ${e.supervisor}.`, 5000);
     else toast(navigator.onLine && settings().fileId ? 'Saved. Tap Sync now to add it to your Judging Record.' : 'Saved on this phone. Sync when you have signal.');
